@@ -3,159 +3,292 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Gestión de Turnos Compartida</title>
+  <title>Sistema de Gestión de Turnos</title>
   <style>
     * {
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     body {
-      background-color: #f0f2f5;
+      background-color: #f4f6f9;
+      color: #333;
       padding: 20px;
     }
-    h1 {
+    header {
       text-align: center;
-      margin-bottom: 20px;
-      color: #1a1a1a;
+      margin-bottom: 25px;
     }
-    .contenedor {
+    header h1 {
+      font-size: 26px;
+      color: #2c3e50;
+    }
+    #usuarioLogueadoBarra {
+      margin-top: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #555;
+    }
+    
+    /* Pantalla de login/registro modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-box {
+      background: #ffffff;
+      padding: 30px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      text-align: center;
+    }
+    .modal-box h2 {
+      margin-bottom: 15px;
+      color: #2c3e50;
+    }
+    .modal-box input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 16px;
+      outline: none;
+    }
+    .modal-box button {
+      width: 100%;
+      padding: 12px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .modal-box button:hover {
+      background-color: #2980b9;
+    }
+
+    /* Layout principal */
+    .contenedor-columnas {
       display: flex;
       gap: 20px;
-      max-width: 1000px;
+      max-width: 1100px;
       margin: 0 auto;
     }
     .columna {
       flex: 1;
       background: #ffffff;
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 20px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      min-height: 400px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      min-height: 450px;
     }
     .columna h2 {
+      font-size: 18px;
       margin-bottom: 15px;
-      border-bottom: 2px solid #eee;
       padding-bottom: 10px;
-      color: #333;
+      border-bottom: 2px solid #eef2f5;
     }
-    .panel-botones {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-    button {
-      border: none;
-      padding: 10px 18px;
-      border-radius: 5px;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    #btnPedir { background-color: #2ecc71; }
-    #btnPedir:hover { background-color: #27ae60; }
-    #btnFinalizar { background-color: #e74c3c; }
-    #btnFinalizar:hover { background-color: #c0392b; }
+    .columna-izquierda h2 { color: #27ae60; }
+    .columna-derecha h2 { color: #7f8c8d; }
 
-    .lista-usuarios {
+    .panel-acciones {
       display: flex;
-      flex-direction: column;
       gap: 10px;
+      margin-bottom: 20px;
     }
-    .tarjeta-usuario {
-      padding: 12px 15px;
+    .btn-accion {
+      border: none;
+      padding: 12px 20px;
       border-radius: 6px;
       color: white;
       font-weight: bold;
-      font-size: 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+      font-size: 15px;
+      cursor: pointer;
+      flex: 1;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .btn-accion:active {
+      transform: scale(0.98);
+    }
+    #btnPedirTurno { background-color: #2ecc71; }
+    #btnPedirTurno:hover { background-color: #27ae60; }
+    #btnFinalizarTurno { background-color: #e74c3c; }
+    #btnFinalizarTurno:hover { background-color: #c0392b; }
+
+    .lista-tarjetas {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tarjeta-usuario {
+      padding: 15px 18px;
+      border-radius: 8px;
+      color: white;
+      font-size: 17px;
+      font-weight: 600;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.12);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .indicador-yo {
+      font-size: 12px;
+      background: rgba(255,255,255,0.3);
+      padding: 3px 8px;
+      border-radius: 12px;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 768px) {
+      .contenedor-columnas {
+        flex-direction: column;
+      }
     }
   </style>
 </head>
 <body>
 
-  <h1>Gestión de Turnos Compartida</h1>
-
-  <div class="contenedor">
-    <!-- Columna Izquierda: En Turno -->
-    <div class="columna">
-      <h2>En Turno</h2>
-      <div class="panel-botones">
-        <button id="btnPedir">Pedir Turno</button>
-        <button id="btnFinalizar">Finalizar</button>
-      </div>
-      <div id="listaEnTurno" class="lista-usuarios"></div>
-    </div>
-
-    <!-- Columna Derecha: Espera y Finalizados -->
-    <div class="columna">
-      <h2>Espera y Finalizados</h2>
-      <div id="listaEspera" class="lista-usuarios"></div>
+  <!-- Modal de Identificación -->
+  <div id="modalLogin" class="modal-overlay">
+    <div class="modal-box">
+      <h2>Registro de Usuario</h2>
+      <p style="margin-bottom: 12px; font-size: 14px; color: #666;">Ingresa tu nombre para acceder al panel de turnos</p>
+      <input type="text" id="inputNombre" placeholder="Tu nombre completo..." autocomplete="off">
+      <button id="btnIngresar">Ingresar al Sistema</button>
     </div>
   </div>
 
-  <!-- Carga cliente nativa de Socket.IO -->
+  <header>
+    <h1>Gestión de Turnos en Tiempo Real</h1>
+    <div id="usuarioLogueadoBarra"></div>
+  </header>
+
+  <div class="contenedor-columnas">
+    <!-- Columna Izquierda -->
+    <div class="columna columna-izquierda">
+      <h2>Turno con Técnico Activo</h2>
+      <div class="panel-acciones">
+        <button id="btnPedirTurno" class="btn-accion">Pedir Turno</button>
+        <button id="btnFinalizarTurno" class="btn-accion">Finalizar</button>
+      </div>
+      <div id="listaIzquierda" class="lista-tarjetas"></div>
+    </div>
+
+    <!-- Columna Derecha -->
+    <div class="columna columna-derecha">
+      <h2>Usuario sin Técnico / Sin Turno</h2>
+      <div id="listaDerecha" class="lista-tarjetas"></div>
+    </div>
+  </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Inicializar conexión sin parámetros para heredar el HTTPS de Render
     const socket = io();
 
-    const btnPedir = document.getElementById('btnPedir');
-    const btnFinalizar = document.getElementById('btnFinalizar');
-    const listaEnTurno = document.getElementById('listaEnTurno');
-    const listaEspera = document.getElementById('listaEspera');
+    const modalLogin = document.getElementById('modalLogin');
+    const inputNombre = document.getElementById('inputNombre');
+    const btnIngresar = document.getElementById('btnIngresar');
+    const usuarioLogueadoBarra = document.getElementById('usuarioLogueadoBarra');
 
-    // Manejar persistencia de usuario localmente
-    let nombreUsuario = localStorage.getItem('nombreUsuario');
+    const btnPedirTurno = document.getElementById('btnPedirTurno');
+    const btnFinalizarTurno = document.getElementById('btnFinalizarTurno');
+    const listaIzquierda = document.getElementById('listaIzquierda');
+    const listaDerecha = document.getElementById('listaDerecha');
 
-    if (!nombreUsuario) {
-      nombreUsuario = prompt('Ingresa tu nombre para el sistema de turnos:');
-      if (nombreUsuario && nombreUsuario.trim() !== '') {
-        nombreUsuario = nombreUsuario.trim();
-        localStorage.setItem('nombreUsuario', nombreUsuario);
-      }
-    }
+    let miNombre = localStorage.getItem('turno_nombre_usuario') || '';
 
-    if (nombreUsuario) {
-      socket.emit('registrar-usuario', nombreUsuario);
-    }
-
-    // Escuchar actualización enviada por el servidor
-    socket.on('actualizar-lista', (usuarios) => {
-      listaEnTurno.innerHTML = '';
-      listaEspera.innerHTML = '';
-
-      Object.values(usuarios).forEach((u) => {
-        const div = document.createElement('div');
-        div.className = 'tarjeta-usuario';
-        div.style.backgroundColor = u.color || '#3498db';
-        div.textContent = u.nombre;
-
-        if (u.enTurno) {
-          listaEnTurno.appendChild(div);
+    // Función para autenticar/registrar en el servidor
+    function autenticarUsuario(nombre) {
+      if (!nombre) return;
+      
+      socket.emit('registrar-usuario', nombre, (respuesta) => {
+        if (respuesta && respuesta.exito) {
+          miNombre = respuesta.usuario.nombre;
+          localStorage.setItem('turno_nombre_usuario', miNombre);
+          modalLogin.style.display = 'none';
+          usuarioLogueadoBarra.textContent = `Sesión activa como: ${miNombre}`;
         } else {
-          listaEspera.appendChild(div);
+          alert(respuesta.mensaje || 'Error al iniciar sesión.');
         }
       });
+    }
+
+    // Auto-login si ya existe el nombre guardado en este navegador
+    if (miNombre) {
+      autenticarUsuario(miNombre);
+    }
+
+    btnIngresar.addEventListener('click', () => {
+      const valor = inputNombre.value.trim();
+      if (valor) {
+        autenticarUsuario(valor);
+      } else {
+        alert('Por favor, ingresa un nombre válido.');
+      }
     });
 
-    // Acciones de los botones
-    btnPedir.addEventListener('click', () => {
-      if (!nombreUsuario) {
-        nombreUsuario = prompt('Ingresa tu nombre:');
-        if (nombreUsuario) localStorage.setItem('nombreUsuario', nombreUsuario);
-      }
-      if (nombreUsuario) {
-        socket.emit('iniciar-turno', nombreUsuario);
+    inputNombre.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') btnIngresar.click();
+    });
+
+    // Eventos de botones de cambio de turno
+    btnPedirTurno.addEventListener('click', () => {
+      if (miNombre) {
+        socket.emit('iniciar-turno', miNombre);
+      } else {
+        modalLogin.style.display = 'flex';
       }
     });
 
-    btnFinalizar.addEventListener('click', () => {
-      if (nombreUsuario) {
-        socket.emit('finalizar-turno', nombreUsuario);
+    btnFinalizarTurno.addEventListener('click', () => {
+      if (miNombre) {
+        socket.emit('finalizar-turno', miNombre);
+      } else {
+        modalLogin.style.display = 'flex';
       }
+    });
+
+    // Renderizado en tiempo real recibido de MongoDB
+    socket.on('actualizar-lista', (usuarios) => {
+      listaIzquierda.innerHTML = '';
+      listaDerecha.innerHTML = '';
+
+      Object.values(usuarios).forEach((u) => {
+        const tarjeta = document.createElement('div');
+        tarjeta.className = 'tarjeta-usuario';
+        tarjeta.style.backgroundColor = u.color || '#3498db';
+
+        const textoNombre = document.createElement('span');
+        textoNombre.textContent = u.nombre;
+        tarjeta.appendChild(textoNombre);
+
+        // Si es el usuario logueado en este dispositivo, agrega una etiqueta "(TÚ)"
+        if (miNombre && u.nombre.toLowerCase() === miNombre.toLowerCase()) {
+          const badge = document.createElement('span');
+          badge.className = 'indicador-yo';
+          badge.textContent = 'Tú';
+          tarjeta.appendChild(badge);
+        }
+
+        if (u.enTurno) {
+          // Columna izquierda (Técnico activo)
+          listaIzquierda.appendChild(tarjeta);
+        } else {
+          // Columna derecha (Sin técnico / Sin turno)
+          listaDerecha.appendChild(tarjeta);
+        }
+      });
     });
   </script>
 </body>
