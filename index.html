@@ -1,147 +1,109 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Turnos en Tiempo Real</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #login-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        .main-container {
-            display: flex;
-            width: 100%;
-            max-width: 900px;
-            gap: 20px;
-            display: none; /* Oculto hasta iniciar sesión */
-        }
-        .column {
-            flex: 1;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
-            min-height: 400px;
-        }
-        .column h3 {
-            border-bottom: 2px solid #ddd;
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-        .user-card {
-            padding: 10px;
-            margin: 8px 0;
-            border-radius: 5px;
-            color: white;
-            font-weight: bold;
-        }
-        .controls {
-            margin-top: 15px;
-            display: flex;
-            gap: 10px;
-        }
-        button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        #btn-turno { background-color: #28a745; color: white; }
-        #btn-finalizado { background-color: #dc3545; color: white; }
-        button:hover { opacity: 0.9; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistema de Turnos en Tiempo Real</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f9; }
+    h1 { text-align: center; }
+    #login-container { text-align: center; margin-bottom: 20px; }
+    input, button { padding: 10px; font-size: 16px; margin: 5px; }
+    
+    .panel-acciones { text-align: center; margin-bottom: 20px; display: none; }
+    .btn-turno { background-color: #2ecc71; color: white; border: none; cursor: pointer; padding: 10px 20px; font-size: 18px; border-radius: 5px; }
+    .btn-finalizado { background-color: #e74c3c; color: white; border: none; cursor: pointer; padding: 10px 20px; font-size: 18px; border-radius: 5px; }
+
+    .tablero { display: flex; gap: 20px; justify-content: center; }
+    .columna { flex: 1; max-width: 400px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); min-height: 300px; }
+    .columna h2 { text-align: center; border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+    
+    .tarjeta-usuario { padding: 12px; margin: 10px 0; border-radius: 5px; color: white; font-weight: bold; text-align: center; font-size: 18px; }
+  </style>
 </head>
 <body>
 
-    <h2>Gestión de Turnos Compartida</h2>
+  <h1>Control de Turnos en Red Local</h1>
 
-    <div id="login-container">
-        <h3>Regístrate para participar</h3>
-        <input type="text" id="nombreInput" placeholder="Tu nombre" required>
-        <label for="colorInput">Color:</label>
-        <input type="color" id="colorInput" value="#3498db">
-        <button onclick="registrar()">Entrar</button>
+  <div id="login-container">
+    <input type="text" id="nombreInput" placeholder="Ingresa tu nombre">
+    <button onclick="ingresar()">Ingresar</button>
+  </div>
+
+  <div id="panelAcciones" class="panel-acciones">
+    <p>Conectado como: <b id="usuarioActual"></b></p>
+    <button class="btn-turno" onclick="iniciarTurno()">Turno</button>
+    <button class="btn-finalizado" onclick="finalizarTurno()">Finalizado</button>
+  </div>
+
+  <div class="tablero">
+    <div class="columna">
+      <h2>En Turno (Izquierda)</h2>
+      <div id="colIzquierda"></div>
     </div>
-
-    <div class="main-container" id="app-container">
-        <div class="column">
-            <h3>En Turno</h3>
-            <div id="columna-turno"></div>
-            <div class="controls">
-                <button id="btn-turno" onclick="darTurno()">Pedir Turno</button>
-                <button id="btn-finalizado" onclick="finalizarTurno()">Finalizar</button>
-            </div>
-        </div>
-
-        <div class="column">
-            <h3>Espera y Finalizados</h3>
-            <div id="columna-espera"></div>
-        </div>
+    <div class="columna">
+      <h2>Sin Turno / Disponibles (Derecha)</h2>
+      <div id="colDerecha"></div>
     </div>
+  </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script>
-        const socket = io();
+  <script>
+    const socket = io();
+    let miNombre = localStorage.getItem('turno_usuario') || '';
 
-        function registrar() {
-            const nombre = document.getElementById('nombreInput').value.trim();
-            const color = document.getElementById('colorInput').value;
+    // Si el usuario ya se había registrado antes en esta PC, reconectar automáticamente
+    socket.on('connect', () => {
+      if (miNombre) {
+        socket.emit('registrar-usuario', miNombre);
+        mostrarPanelControl(miNombre);
+      }
+    });
 
-            if (!nombre) {
-                alert("Por favor ingresa tu nombre");
-                return;
-            }
+    function ingresar() {
+      const nombre = document.getElementById('nombreInput').value.trim();
+      if (nombre) {
+        miNombre = nombre;
+        localStorage.setItem('turno_usuario', miNombre);
+        socket.emit('registrar-usuario', miNombre);
+        mostrarPanelControl(miNombre);
+      }
+    }
 
-            socket.emit('registrar_usuario', { nombre, color });
+    function mostrarPanelControl(nombre) {
+      document.getElementById('login-container').style.display = 'none';
+      document.getElementById('panelAcciones').style.display = 'block';
+      document.getElementById('usuarioActual').textContent = nombre;
+    }
 
-            document.getElementById('login-container').style.display = 'none';
-            document.getElementById('app-container').style.display = 'flex';
+    function iniciarTurno() {
+      socket.emit('iniciar-turno', miNombre);
+    }
+
+    function finalizarTurno() {
+      socket.emit('finalizar-turno', miNombre);
+    }
+
+    socket.on('actualizar-lista', (usuarios) => {
+      const colIzquierda = document.getElementById('colIzquierda');
+      const colDerecha = document.getElementById('colDerecha');
+
+      colIzquierda.innerHTML = '';
+      colDerecha.innerHTML = '';
+
+      Object.values(usuarios).forEach(user => {
+        const tarjeta = document.createElement('div');
+        tarjeta.className = 'tarjeta-usuario';
+        tarjeta.style.backgroundColor = user.color;
+        tarjeta.textContent = user.nombre;
+
+        if (user.enTurno) {
+          colIzquierda.appendChild(tarjeta);
+        } else {
+          colDerecha.appendChild(tarjeta);
         }
-
-        function darTurno() {
-            socket.emit('dar_turno');
-        }
-
-        function finalizarTurno() {
-            socket.emit('finalizar_turno');
-        }
-
-        // Escuchar actualizaciones del servidor
-        socket.on('actualizar_usuarios', (usuarios) => {
-            const colTurno = document.getElementById('columna-turno');
-            const colEspera = document.getElementById('columna-espera');
-
-            colTurno.innerHTML = '';
-            colEspera.innerHTML = '';
-
-            usuarios.forEach(user => {
-                const div = document.createElement('div');
-                div.className = 'user-card';
-                div.style.backgroundColor = user.color;
-                div.textContent = user.nombre;
-
-                if (user.estado === 'turno') {
-                    colTurno.appendChild(div);
-                } else {
-                    // Si está en espera o finalizado va a la columna derecha
-                    colEspera.appendChild(div);
-                }
-            });
-        });
-    </script>
+      });
+    });
+  </script>
 </body>
 </html>
