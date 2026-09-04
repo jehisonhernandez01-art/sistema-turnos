@@ -8,26 +8,25 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Servir archivos estáticos directamente desde la raíz del proyecto
+// Servir archivos estáticos directamente desde la raíz
 app.use(express.static(__dirname));
 
-// Servir el archivo index.html cuando entren a la ruta raíz '/'
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Obtener la URL de conexión desde la variable de entorno de Render
+// Conexión a MongoDB Atlas
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-  console.error('ERROR: No se ha definido la variable de entorno MONGO_URI.');
+  console.error('CRÍTICO: No se ha configurado la variable MONGO_URI en Render.');
 } else {
   mongoose.connect(MONGO_URI)
     .then(() => console.log('Conectado exitosamente a MongoDB Atlas'))
     .catch((err) => console.error('Error al conectar a MongoDB:', err));
 }
 
-// Esquema de datos para los usuarios en MongoDB
+// Modelo de datos para MongoDB
 const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
@@ -37,13 +36,12 @@ const usuarioSchema = new mongoose.Schema({
 
 const Usuario = mongoose.model('Usuario', usuarioSchema);
 
-const colores = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#d35400'];
+const colores = ['#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c', '#e74c3c', '#34495e'];
 
 function obtenerColorAleatorio() {
   return colores[Math.floor(Math.random() * colores.length)];
 }
 
-// Función auxiliar para obtener todos los usuarios formateados como objeto
 async function obtenerUsuarios() {
   try {
     const lista = await Usuario.find();
@@ -57,16 +55,16 @@ async function obtenerUsuarios() {
     });
     return mapaUsuarios;
   } catch (error) {
-    console.error('Error al consultar usuarios:', error);
+    console.error('Error obteniendo usuarios:', error);
     return {};
   }
 }
 
 io.on('connection', async (socket) => {
-  // Enviar el estado actual apenas se conecta cualquier pantalla
+  // Enviar la lista de usuarios al conectar
   socket.emit('actualizar-lista', await obtenerUsuarios());
 
-  // Registrar o Reconectar usuario mediante su nombre
+  // Registrar usuario nuevo o existente
   socket.on('registrar-usuario', async (nombre) => {
     if (!nombre) return;
     const claveNombre = nombre.trim().toLowerCase();
@@ -75,7 +73,6 @@ io.on('connection', async (socket) => {
       let usuario = await Usuario.findOne({ clave: claveNombre });
 
       if (!usuario) {
-        // Usuario nuevo: se crea en MongoDB
         usuario = new Usuario({
           clave: claveNombre,
           nombre: nombre.trim(),
@@ -88,11 +85,11 @@ io.on('connection', async (socket) => {
       socket.nombreUsuario = claveNombre;
       io.emit('actualizar-lista', await obtenerUsuarios());
     } catch (error) {
-      console.error('Error al registrar usuario:', error);
+      console.error('Error en registrar-usuario:', error);
     }
   });
 
-  // Cambiar a columna izquierda (En Turno)
+  // Mover a la columna de "En Turno" (Izquierda)
   socket.on('iniciar-turno', async (nombre) => {
     const clave = (nombre || socket.nombreUsuario)?.trim().toLowerCase();
     if (clave) {
@@ -100,12 +97,12 @@ io.on('connection', async (socket) => {
         await Usuario.updateOne({ clave }, { enTurno: true });
         io.emit('actualizar-lista', await obtenerUsuarios());
       } catch (error) {
-        console.error('Error al iniciar turno:', error);
+        console.error('Error en iniciar-turno:', error);
       }
     }
   });
 
-  // Cambiar a columna derecha (Finalizado / Disponible)
+  // Mover a la columna de "Espera y Finalizados" (Derecha)
   socket.on('finalizar-turno', async (nombre) => {
     const clave = (nombre || socket.nombreUsuario)?.trim().toLowerCase();
     if (clave) {
@@ -113,14 +110,13 @@ io.on('connection', async (socket) => {
         await Usuario.updateOne({ clave }, { enTurno: false });
         io.emit('actualizar-lista', await obtenerUsuarios());
       } catch (error) {
-        console.error('Error al finalizar turno:', error);
+        console.error('Error en finalizar-turno:', error);
       }
     }
   });
 });
 
-// Render asigna dinámicamente un puerto en process.env.PORT
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Servidor escuchando en el puerto ${PORT}`);
+  console.log(`Servidor activo en el puerto ${PORT}`);
 });
