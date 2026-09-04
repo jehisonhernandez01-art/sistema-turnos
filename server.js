@@ -8,7 +8,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir archivos estáticos directamente desde la raíz del proyecto
+app.use(express.static(__dirname));
+
+// Servir el archivo index.html cuando entren a la ruta raíz '/'
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Obtener la URL de conexión desde la variable de entorno de Render
 const MONGO_URI = process.env.MONGO_URI;
