@@ -1,6 +1,7 @@
 {
   "name": "sistema-turnos",
   "version": "1.0.0",
+  "description": "Sistema de gestión de turnos en tiempo real",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
