@@ -117,6 +117,23 @@ io.on('connection', async (socket) => {
     }
   });
 
+  // Finalizar conexión de un usuario específico
+  socket.on('finalizar-conexion', async (claveUsuario, callback) => {
+    if (!claveUsuario) return;
+    try {
+      await Usuario.deleteOne({ clave: claveUsuario });
+      io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+      if (typeof callback === 'function') {
+        callback({ exito: true });
+      }
+    } catch (error) {
+      console.error('Error al finalizar conexión:', error);
+      if (typeof callback === 'function') {
+        callback({ exito: false, mensaje: 'Error al salir de la lista.' });
+      }
+    }
+  });
+
   // Reiniciar sistema con validación de contraseña
   socket.on('reiniciar-sistema', async (passwordIngresada, callback) => {
     if (passwordIngresada !== ADMIN_PASSWORD) {
