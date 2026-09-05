@@ -40,12 +40,14 @@
       box-shadow: 0 5px 25px rgba(0,0,0,0.5);
     }
     .modal-box input {
-      width: 100%; padding: 12px; margin: 15px 0; border-radius: 6px; border: none; font-size: 16px; outline: none;
+      width: 100%; padding: 12px; margin: 15px 0 10px 0; border-radius: 6px; border: none; font-size: 16px; outline: none;
     }
     .modal-box button {
-      width: 100%; padding: 12px; background: #00cec9; border: none; color: #fff;
-      font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 16px;
+      width: 100%; padding: 12px; border: none; color: #fff;
+      font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 16px; margin-top: 8px;
     }
+    .btn-ingresar { background: #00cec9; }
+    .btn-solo-vista { background: #0984e3; }
 
     /* Notificación Emergente Gigante de Turno Activo */
     .modal-turno-overlay {
@@ -121,14 +123,18 @@
       <h2>Asignación de PC</h2>
       <p style="margin-top: 5px; color: #b2bec3;">Ingresa tu nombre para identificarte en el sistema</p>
       <input type="text" id="inputNombre" placeholder="Tu nombre..." autocomplete="off">
-      <button id="btnIngresar">Entrar</button>
+      <button id="btnIngresar" class="btn-ingresar">Entrar al Sistema</button>
+      
+      <hr style="border: 0; border-top: 1px solid #636e72; margin: 15px 0;">
+      
+      <button id="btnSoloVista" class="btn-solo-vista">👁️ Acceder en Solo Vista</button>
     </div>
   </div>
 
   <!-- Modal Emergente Gigante de Notificación de Turno -->
   <div id="modalTurnoEmergente" class="modal-turno-overlay">
     <div class="modal-turno-box">
-      <h2>¡ES TU TURNO!</h2>
+      <h2 id="tituloModalTurno">¡ES TU TURNO!</h2>
 
       <!-- Nombre del usuario resaltado -->
       <h1 id="nombreTurnoActual" style="
@@ -143,7 +149,7 @@
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       "></h1>
 
-      <p>Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.</p>
+      <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.</p>
       <button id="btnEnTurno">EN TURNO</button>
     </div>
   </div>
@@ -170,33 +176,60 @@
     const modalLogin = document.getElementById('modalLogin');
     const inputNombre = document.getElementById('inputNombre');
     const btnIngresar = document.getElementById('btnIngresar');
+    const btnSoloVista = document.getElementById('btnSoloVista');
     const infoUsuario = document.getElementById('infoUsuario');
     const modalTurnoEmergente = document.getElementById('modalTurnoEmergente');
     const nombreTurnoActual = document.getElementById('nombreTurnoActual');
+    const tituloModalTurno = document.getElementById('tituloModalTurno');
+    const descripcionModalTurno = document.getElementById('descripcionModalTurno');
     const btnEnTurno = document.getElementById('btnEnTurno');
     const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
 
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
+    let esSoloVista = localStorage.getItem('ruleta_solo_vista') === 'true';
 
     function registrar(nombre) {
       socket.emit('registrar-usuario', nombre, (res) => {
         if (res && res.exito) {
           miClave = res.usuario.clave;
           miNombre = res.usuario.nombre;
+          esSoloVista = false;
           localStorage.setItem('ruleta_clave_pc', miClave);
           localStorage.setItem('ruleta_nombre_pc', miNombre);
+          localStorage.removeItem('ruleta_solo_vista');
           modalLogin.style.display = 'none';
           infoUsuario.textContent = `PC asignada a: ${miNombre}`;
         }
       });
     }
 
-    if (miNombre) registrar(miNombre);
+    function activarSoloVista() {
+      esSoloVista = true;
+      miClave = '';
+      miNombre = '';
+      localStorage.removeItem('ruleta_clave_pc');
+      localStorage.removeItem('ruleta_nombre_pc');
+      localStorage.setItem('ruleta_solo_vista', 'true');
+      modalLogin.style.display = 'none';
+      infoUsuario.textContent = `Modo: Solo Vista (Monitor Central)`;
+      infoUsuario.style.color = '#0984e3';
+    }
+
+    // Auto-login o restaurar modo
+    if (esSoloVista) {
+      activarSoloVista();
+    } else if (miNombre) {
+      registrar(miNombre);
+    }
 
     btnIngresar.addEventListener('click', () => {
       const val = inputNombre.value.trim();
       if (val) registrar(val);
+    });
+
+    btnSoloVista.addEventListener('click', () => {
+      activarSoloVista();
     });
 
     btnEnTurno.addEventListener('click', () => {
@@ -219,7 +252,7 @@
       }
     });
 
-    // Dibujar la ruleta y validar emergente
+    // Dibujar la ruleta alineando automáticamente al usuario en turno con la flecha superior
     socket.on('actualizar-ruleta', (usuarios) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
@@ -234,10 +267,14 @@
       const radio = canvas.width / 2;
       const anguloPorSector = (2 * Math.PI) / total;
 
+      // Desfase para alinear el centro del primer sector justo en las 12 en punto (donde apunta la flecha)
+      const offset = -Math.PI / 2 - (anguloPorSector / 2);
+
       usuarios.forEach((u, index) => {
-        const inicio = -Math.PI / 2 + (index * anguloPorSector);
+        const inicio = offset + (index * anguloPorSector);
         const fin = inicio + anguloPorSector;
 
+        // Dibujar rebanada
         ctx.beginPath();
         ctx.moveTo(centroX, centroY);
         ctx.arc(centroX, centroY, radio, inicio, fin);
@@ -246,23 +283,43 @@
         ctx.fill();
         ctx.stroke();
 
+        // Dibujar texto
         ctx.save();
         ctx.translate(centroX, centroY);
         ctx.rotate(inicio + anguloPorSector / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#fff";
         ctx.font = "bold 18px Segoe UI";
-        ctx.fillText(u.nombre, radio - 20, 5);
+        ctx.fillText(u.nombre, radio - 20, 6);
         ctx.restore();
       });
 
-      // Mostrar la ventana emergente gigante SOLO en la PC del usuario en turno
+      // Lógica de visualización de emergentes
       const primerUsuario = usuarios[0];
-      if (miClave && primerUsuario && primerUsuario.clave === miClave) {
-        nombreTurnoActual.textContent = primerUsuario.nombre;
-        modalTurnoEmergente.style.display = 'flex';
+
+      if (esSoloVista) {
+        // En modo Solo Vista se muestra el aviso de quién está en turno sin requerir interactuar obligatoriamente
+        if (primerUsuario) {
+          tituloModalTurno.textContent = "TURNO ACTUAL";
+          nombreTurnoActual.textContent = primerUsuario.nombre;
+          descripcionModalTurno.textContent = "Atención asignada actualmente con el Técnico.";
+          btnEnTurno.style.display = "none"; // Oculta el botón para evitar avances accidentales desde el monitor
+          modalTurnoEmergente.style.display = 'flex';
+        } else {
+          modalTurnoEmergente.style.display = 'none';
+        }
       } else {
-        modalTurnoEmergente.style.display = 'none';
+        // En modo Participante solo se despliega en la PC correspondiente
+        btnEnTurno.style.display = "inline-block";
+        tituloModalTurno.textContent = "¡ES TU TURNO!";
+        descripcionModalTurno.textContent = "Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.";
+
+        if (miClave && primerUsuario && primerUsuario.clave === miClave) {
+          nombreTurnoActual.textContent = primerUsuario.nombre;
+          modalTurnoEmergente.style.display = 'flex';
+        } else {
+          modalTurnoEmergente.style.display = 'none';
+        }
       }
     });
   </script>
