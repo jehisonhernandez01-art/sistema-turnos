@@ -16,7 +16,26 @@
       margin: 0 auto 20px auto;
       padding-bottom: 10px;
       border-bottom: 1px solid #3d3d3d;
+      gap: 10px;
+      flex-wrap: wrap;
     }
+
+    .header-botones {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-salir {
+      background-color: #e67e22;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-salir:hover { background-color: #d35400; }
 
     .btn-reiniciar {
       background-color: #ff4757;
@@ -159,7 +178,10 @@
       <h1 style="font-size: 22px;">Ruleta de Turnos</h1>
       <p id="infoUsuario" style="color: #00cec9; text-align: left; font-size: 14px; margin-top: 3px;"></p>
     </div>
-    <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
+    <div class="header-botones">
+      <button id="btnSalirTurno" class="btn-salir" style="display: none;">Finalizar Conexión</button>
+      <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
+    </div>
   </header>
 
   <div class="ruleta-container">
@@ -183,6 +205,7 @@
     const tituloModalTurno = document.getElementById('tituloModalTurno');
     const descripcionModalTurno = document.getElementById('descripcionModalTurno');
     const btnEnTurno = document.getElementById('btnEnTurno');
+    const btnSalirTurno = document.getElementById('btnSalirTurno');
     const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
 
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
@@ -199,6 +222,7 @@
           localStorage.setItem('ruleta_nombre_pc', miNombre);
           localStorage.removeItem('ruleta_solo_vista');
           modalLogin.style.display = 'none';
+          btnSalirTurno.style.display = 'inline-block';
           infoUsuario.textContent = `PC asignada a: ${miNombre}`;
         }
       });
@@ -212,6 +236,7 @@
       localStorage.removeItem('ruleta_nombre_pc');
       localStorage.setItem('ruleta_solo_vista', 'true');
       modalLogin.style.display = 'none';
+      btnSalirTurno.style.display = 'none';
       infoUsuario.textContent = `Modo: Solo Vista (Monitor Central)`;
       infoUsuario.style.color = '#0984e3';
     }
@@ -234,6 +259,20 @@
 
     btnEnTurno.addEventListener('click', () => {
       socket.emit('siguiente-turno');
+    });
+
+    // Salir de la lista de turnos y finalizar conexión
+    btnSalirTurno.addEventListener('click', () => {
+      if (confirm('¿Estás seguro de que deseas salir de la lista de turnos?')) {
+        socket.emit('finalizar-conexion', miClave, (respuesta) => {
+          if (respuesta && respuesta.exito) {
+            localStorage.clear();
+            location.reload();
+          } else {
+            alert(respuesta.mensaje || 'Error al intentar salir.');
+          }
+        });
+      }
     });
 
     // Botón de reinicio protegido con contraseña
