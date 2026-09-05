@@ -8,27 +8,97 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
     body { background-color: #1e272e; color: #fff; text-align: center; padding: 20px; }
 
-    /* Modal Registro */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 900px;
+      margin: 0 auto 20px auto;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #3d3d3d;
+    }
+
+    .btn-reiniciar {
+      background-color: #ff4757;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      font-weight: bold;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-reiniciar:hover { background-color: #ff6b81; }
+
+    /* Modales */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000;
     }
     .modal-box {
       background: #2d3436; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.5);
     }
     .modal-box input {
-      width: 100%; padding: 12px; margin: 15px 0; border-radius: 6px; border: none; font-size: 16px;
+      width: 100%; padding: 12px; margin: 15px 0; border-radius: 6px; border: none; font-size: 16px; outline: none;
     }
     .modal-box button {
       width: 100%; padding: 12px; background: #00cec9; border: none; color: #fff;
       font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 16px;
     }
 
-    /* Contenedor Ruleta */
-    .ruleta-container {
-      position: relative; width: 360px; height: 360px; margin: 30px auto;
+    /* Notificación Emergente Gigante de Turno Activo */
+    .modal-turno-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(46, 204, 113, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      animation: pulsoFondo 1.5s infinite alternate;
     }
-    /* Flecha superior fija apuntando abajo */
+    @keyframes pulsoFondo {
+      0% { background: rgba(46, 204, 113, 0.92); }
+      100% { background: rgba(39, 174, 96, 0.98); }
+    }
+    .modal-turno-box {
+      background: #ffffff;
+      color: #2c3e50;
+      padding: 40px;
+      border-radius: 16px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+    .modal-turno-box h2 {
+      font-size: 32px;
+      color: #27ae60;
+      margin-bottom: 10px;
+    }
+    .modal-turno-box p {
+      font-size: 18px;
+      color: #555;
+      margin-bottom: 25px;
+    }
+    #btnEnTurno {
+      background: #27ae60;
+      color: #ffffff;
+      border: none;
+      padding: 16px 35px;
+      font-size: 22px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
+      transition: transform 0.1s;
+    }
+    #btnEnTurno:active { transform: scale(0.96); }
+
+    /* Ruleta */
+    .ruleta-container {
+      position: relative; width: 360px; height: 360px; margin: 20px auto;
+    }
     .flecha-indicadora {
       position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
       width: 0; height: 0;
@@ -40,49 +110,37 @@
     canvas {
       width: 100%; height: 100%; border-radius: 50%;
       box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      transition: transform 1s cubic-bezier(0.25, 0.1, 0.25, 1);
-    }
-
-    /* Notificación de Turno */
-    #notificacionTurno {
-      display: none; background: #2ecc71; padding: 20px; border-radius: 10px;
-      max-width: 400px; margin: 20px auto; box-shadow: 0 4px 15px rgba(46,204,113,0.4);
-    }
-    #notificacionTurno h2 { margin-bottom: 10px; }
-    #btnEnTurno {
-      background: #ffffff; color: #27ae60; border: none; padding: 12px 25px;
-      font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 10px;
-    }
-
-    /* Botón Invisible */
-    #btnResetInvisible {
-      position: fixed; top: 0; right: 0; width: 30px; height: 30px;
-      background: transparent; border: none; opacity: 0; cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <button id="btnResetInvisible"></button>
-
+  <!-- Modal Registro de Usuario -->
   <div id="modalLogin" class="modal-overlay">
     <div class="modal-box">
       <h2>Asignación de PC</h2>
-      <p>Ingresa tu nombre para entrar a la ruleta</p>
+      <p style="margin-top: 5px; color: #b2bec3;">Ingresa tu nombre para identificarte en el sistema</p>
       <input type="text" id="inputNombre" placeholder="Tu nombre..." autocomplete="off">
       <button id="btnIngresar">Entrar</button>
     </div>
   </div>
 
-  <h1 style="margin-top: 10px;">Sistema de Turnos - Ruleta</h1>
-  <p id="infoUsuario" style="color: #00cec9; margin-top: 5px;"></p>
-
-  <!-- Notificación activa solo para el usuario en turno -->
-  <div id="notificacionTurno">
-    <h2>¡Turno con Técnico!</h2>
-    <p>Haz clic para confirmar e iniciar tu atención.</p>
-    <button id="btnEnTurno">En Turno</button>
+  <!-- Modal Emergente Gigante de Notificación de Turno -->
+  <div id="modalTurnoEmergente" class="modal-turno-overlay">
+    <div class="modal-turno-box">
+      <h2>¡ES TU TURNO!</h2>
+      <p>Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.</p>
+      <button id="btnEnTurno">EN TURNO</button>
+    </div>
   </div>
+
+  <header>
+    <div>
+      <h1 style="font-size: 22px;">Ruleta de Turnos</h1>
+      <p id="infoUsuario" style="color: #00cec9; text-align: left; font-size: 14px; margin-top: 3px;"></p>
+    </div>
+    <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
+  </header>
 
   <div class="ruleta-container">
     <div class="flecha-indicadora"></div>
@@ -99,9 +157,9 @@
     const inputNombre = document.getElementById('inputNombre');
     const btnIngresar = document.getElementById('btnIngresar');
     const infoUsuario = document.getElementById('infoUsuario');
-    const notificacionTurno = document.getElementById('notificacionTurno');
+    const modalTurnoEmergente = document.getElementById('modalTurnoEmergente');
     const btnEnTurno = document.getElementById('btnEnTurno');
-    const btnResetInvisible = document.getElementById('btnResetInvisible');
+    const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
 
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
@@ -130,21 +188,29 @@
       socket.emit('siguiente-turno');
     });
 
-    btnResetInvisible.addEventListener('click', () => {
-      if (confirm('¿Reiniciar ruleta y borrar todos los registros?')) {
-        socket.emit('reiniciar-sistema');
-        localStorage.clear();
-        location.reload();
+    // Botón de reinicio protegido con contraseña
+    btnReiniciarGeneral.addEventListener('click', () => {
+      const password = prompt('🔐 Ingresa la contraseña de administrador para borrar todos los usuarios:');
+      if (password) {
+        socket.emit('reiniciar-sistema', password, (respuesta) => {
+          if (respuesta && respuesta.exito) {
+            alert(respuesta.mensaje);
+            localStorage.clear();
+            location.reload();
+          } else {
+            alert(respuesta.mensaje || 'Error al intentar reiniciar.');
+          }
+        });
       }
     });
 
-    // Dibujar la ruleta
+    // Dibujar la ruleta y validar emergente
     socket.on('actualizar-ruleta', (usuarios) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
 
       if (total === 0) {
-        notificacionTurno.style.display = 'none';
+        modalTurnoEmergente.style.display = 'none';
         return;
       }
 
@@ -153,8 +219,6 @@
       const radio = canvas.width / 2;
       const anguloPorSector = (2 * Math.PI) / total;
 
-      // Dibujar sectores
-      // Desplazamos -Math.PI/2 para que el índice 0 empiece arriba donde está la flecha
       usuarios.forEach((u, index) => {
         const inicio = -Math.PI / 2 + (index * anguloPorSector);
         const fin = inicio + anguloPorSector;
@@ -167,7 +231,6 @@
         ctx.fill();
         ctx.stroke();
 
-        // Texto del nombre
         ctx.save();
         ctx.translate(centroX, centroY);
         ctx.rotate(inicio + anguloPorSector / 2);
@@ -178,12 +241,12 @@
         ctx.restore();
       });
 
-      // Verificar si ESTA PC es la elegida (primer elemento de la lista)
+      // Mostrar la ventana emergente gigante SOLO en la PC en turno
       const primerUsuario = usuarios[0];
       if (miClave && primerUsuario && primerUsuario.clave === miClave) {
-        notificacionTurno.style.display = 'block';
+        modalTurnoEmergente.style.display = 'flex';
       } else {
-        notificacionTurno.style.display = 'none';
+        modalTurnoEmergente.style.display = 'none';
       }
     });
   </script>
