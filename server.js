@@ -61,7 +61,7 @@ async function obtenerEstadoRuleta() {
 }
 
 // Contraseña para reiniciar el sistema
-const ADMIN_PASSWORD = '20262026'; // Puedes cambiar '123' por la clave que desees
+const ADMIN_PASSWORD = '123'; // Puedes cambiar '123' por la clave que desees
 
 io.on('connection', async (socket) => {
   // Enviar estado inicial al conectar
