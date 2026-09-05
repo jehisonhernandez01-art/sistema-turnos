@@ -60,8 +60,11 @@ async function obtenerEstadoRuleta() {
   }));
 }
 
+// Contraseña para reiniciar el sistema
+const ADMIN_PASSWORD = '20262026'; // Puedes cambiar '123' por la clave que quieras
+
 io.on('connection', async (socket) => {
-  // Enviar estado inicial
+  // Enviar estado inicial al conectar
   socket.emit('actualizar-ruleta', await obtenerEstadoRuleta());
 
   // Registrar usuario
@@ -93,7 +96,7 @@ io.on('connection', async (socket) => {
     } catch (error) {
       console.error('Error al registrar:', error);
       if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Error al registrar.' });
+        callback({ exito: false, mensaje: 'Error al registrar el usuario.' });
       }
     }
   });
@@ -104,7 +107,6 @@ io.on('connection', async (socket) => {
       const lista = await Usuario.find().sort({ fechaRegistro: 1 });
       if (lista.length > 0) {
         const primerUsuario = lista[0];
-        // Actualizamos su fecha al momento actual para moverlo al final
         primerUsuario.fechaRegistro = new Date();
         await primerUsuario.save();
 
@@ -115,16 +117,30 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Reiniciar sistema
-  socket.on('reiniciar-sistema', async () => {
+  // Reiniciar sistema con validación de contraseña
+  socket.on('reiniciar-sistema', async (passwordIngresada, callback) => {
+    if (passwordIngresada !== ADMIN_PASSWORD) {
+      if (typeof callback === 'function') {
+        callback({ exito: false, mensaje: 'Contraseña incorrecta. No se borrarán los usuarios.' });
+      }
+      return;
+    }
+
     try {
       await Usuario.deleteMany({});
       io.emit('actualizar-ruleta', []);
+      if (typeof callback === 'function') {
+        callback({ exito: true, mensaje: 'Sistema reiniciado exitosamente.' });
+      }
+      console.log('Sistema de turnos reiniciado correctamente.');
     } catch (error) {
       console.error('Error al reiniciar:', error);
+      if (typeof callback === 'function') {
+        callback({ exito: false, mensaje: 'Error interno en el servidor al intentar reiniciar.' });
+      }
     }
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Servidor en puerto ${PORT}`));
+server.listen(PORT, () => console.log(`Servidor escuchando en el puerto ${PORT}`));
