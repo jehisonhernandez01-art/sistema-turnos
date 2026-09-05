@@ -3,292 +3,188 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sistema de Gestión de Turnos</title>
+  <title>Ruleta de Turnos</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    body {
-      background-color: #f4f6f9;
-      color: #333;
-      padding: 20px;
-    }
-    header {
-      text-align: center;
-      margin-bottom: 25px;
-    }
-    header h1 {
-      font-size: 26px;
-      color: #2c3e50;
-    }
-    #usuarioLogueadoBarra {
-      margin-top: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      color: #555;
-    }
-    
-    /* Pantalla de login/registro modal */
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+    body { background-color: #1e272e; color: #fff; text-align: center; padding: 20px; }
+
+    /* Modal Registro */
     .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 1000;
     }
     .modal-box {
-      background: #ffffff;
-      padding: 30px;
-      border-radius: 10px;
-      width: 90%;
-      max-width: 400px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-      text-align: center;
-    }
-    .modal-box h2 {
-      margin-bottom: 15px;
-      color: #2c3e50;
+      background: #2d3436; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px;
     }
     .modal-box input {
-      width: 100%;
-      padding: 12px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 16px;
-      outline: none;
+      width: 100%; padding: 12px; margin: 15px 0; border-radius: 6px; border: none; font-size: 16px;
     }
     .modal-box button {
-      width: 100%;
-      padding: 12px;
-      background-color: #3498db;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .modal-box button:hover {
-      background-color: #2980b9;
+      width: 100%; padding: 12px; background: #00cec9; border: none; color: #fff;
+      font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 16px;
     }
 
-    /* Layout principal */
-    .contenedor-columnas {
-      display: flex;
-      gap: 20px;
-      max-width: 1100px;
-      margin: 0 auto;
+    /* Contenedor Ruleta */
+    .ruleta-container {
+      position: relative; width: 360px; height: 360px; margin: 30px auto;
     }
-    .columna {
-      flex: 1;
-      background: #ffffff;
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-      min-height: 450px;
+    /* Flecha superior fija apuntando abajo */
+    .flecha-indicadora {
+      position: absolute; top: -15px; left: 50%; transform: translateX(-50%);
+      width: 0; height: 0;
+      border-left: 18px solid transparent;
+      border-right: 18px solid transparent;
+      border-top: 30px solid #e74c3c;
+      z-index: 10;
     }
-    .columna h2 {
-      font-size: 18px;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #eef2f5;
-    }
-    .columna-izquierda h2 { color: #27ae60; }
-    .columna-derecha h2 { color: #7f8c8d; }
-
-    .panel-acciones {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    .btn-accion {
-      border: none;
-      padding: 12px 20px;
-      border-radius: 6px;
-      color: white;
-      font-weight: bold;
-      font-size: 15px;
-      cursor: pointer;
-      flex: 1;
-      transition: transform 0.1s, background 0.2s;
-    }
-    .btn-accion:active {
-      transform: scale(0.98);
-    }
-    #btnPedirTurno { background-color: #2ecc71; }
-    #btnPedirTurno:hover { background-color: #27ae60; }
-    #btnFinalizarTurno { background-color: #e74c3c; }
-    #btnFinalizarTurno:hover { background-color: #c0392b; }
-
-    .lista-tarjetas {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .tarjeta-usuario {
-      padding: 15px 18px;
-      border-radius: 8px;
-      color: white;
-      font-size: 17px;
-      font-weight: 600;
-      box-shadow: 0 3px 6px rgba(0,0,0,0.12);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .indicador-yo {
-      font-size: 12px;
-      background: rgba(255,255,255,0.3);
-      padding: 3px 8px;
-      border-radius: 12px;
-      text-transform: uppercase;
+    canvas {
+      width: 100%; height: 100%; border-radius: 50%;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      transition: transform 1s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
 
-    @media (max-width: 768px) {
-      .contenedor-columnas {
-        flex-direction: column;
-      }
+    /* Notificación de Turno */
+    #notificacionTurno {
+      display: none; background: #2ecc71; padding: 20px; border-radius: 10px;
+      max-width: 400px; margin: 20px auto; box-shadow: 0 4px 15px rgba(46,204,113,0.4);
+    }
+    #notificacionTurno h2 { margin-bottom: 10px; }
+    #btnEnTurno {
+      background: #ffffff; color: #27ae60; border: none; padding: 12px 25px;
+      font-size: 18px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 10px;
+    }
+
+    /* Botón Invisible */
+    #btnResetInvisible {
+      position: fixed; top: 0; right: 0; width: 30px; height: 30px;
+      background: transparent; border: none; opacity: 0; cursor: pointer;
     }
   </style>
 </head>
 <body>
 
-  <!-- Modal de Identificación -->
+  <button id="btnResetInvisible"></button>
+
   <div id="modalLogin" class="modal-overlay">
     <div class="modal-box">
-      <h2>Registro de Usuario</h2>
-      <p style="margin-bottom: 12px; font-size: 14px; color: #666;">Ingresa tu nombre para acceder al panel de turnos</p>
-      <input type="text" id="inputNombre" placeholder="Tu nombre completo..." autocomplete="off">
-      <button id="btnIngresar">Ingresar al Sistema</button>
+      <h2>Asignación de PC</h2>
+      <p>Ingresa tu nombre para entrar a la ruleta</p>
+      <input type="text" id="inputNombre" placeholder="Tu nombre..." autocomplete="off">
+      <button id="btnIngresar">Entrar</button>
     </div>
   </div>
 
-  <header>
-    <h1>Gestión de Turnos en Tiempo Real</h1>
-    <div id="usuarioLogueadoBarra"></div>
-  </header>
+  <h1 style="margin-top: 10px;">Sistema de Turnos - Ruleta</h1>
+  <p id="infoUsuario" style="color: #00cec9; margin-top: 5px;"></p>
 
-  <div class="contenedor-columnas">
-    <!-- Columna Izquierda -->
-    <div class="columna columna-izquierda">
-      <h2>Turno con Técnico Activo</h2>
-      <div class="panel-acciones">
-        <button id="btnPedirTurno" class="btn-accion">Pedir Turno</button>
-        <button id="btnFinalizarTurno" class="btn-accion">Finalizar</button>
-      </div>
-      <div id="listaIzquierda" class="lista-tarjetas"></div>
-    </div>
+  <!-- Notificación activa solo para el usuario en turno -->
+  <div id="notificacionTurno">
+    <h2>¡Turno con Técnico!</h2>
+    <p>Haz clic para confirmar e iniciar tu atención.</p>
+    <button id="btnEnTurno">En Turno</button>
+  </div>
 
-    <!-- Columna Derecha -->
-    <div class="columna columna-derecha">
-      <h2>Usuario sin Técnico / Sin Turno</h2>
-      <div id="listaDerecha" class="lista-tarjetas"></div>
-    </div>
+  <div class="ruleta-container">
+    <div class="flecha-indicadora"></div>
+    <canvas id="canvasRuleta" width="400" height="400"></canvas>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
 
+    const canvas = document.getElementById('canvasRuleta');
+    const ctx = canvas.getContext('2d');
     const modalLogin = document.getElementById('modalLogin');
     const inputNombre = document.getElementById('inputNombre');
     const btnIngresar = document.getElementById('btnIngresar');
-    const usuarioLogueadoBarra = document.getElementById('usuarioLogueadoBarra');
+    const infoUsuario = document.getElementById('infoUsuario');
+    const notificacionTurno = document.getElementById('notificacionTurno');
+    const btnEnTurno = document.getElementById('btnEnTurno');
+    const btnResetInvisible = document.getElementById('btnResetInvisible');
 
-    const btnPedirTurno = document.getElementById('btnPedirTurno');
-    const btnFinalizarTurno = document.getElementById('btnFinalizarTurno');
-    const listaIzquierda = document.getElementById('listaIzquierda');
-    const listaDerecha = document.getElementById('listaDerecha');
+    let miClave = localStorage.getItem('ruleta_clave_pc') || '';
+    let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
 
-    let miNombre = localStorage.getItem('turno_nombre_usuario') || '';
-
-    // Función para autenticar/registrar en el servidor
-    function autenticarUsuario(nombre) {
-      if (!nombre) return;
-      
-      socket.emit('registrar-usuario', nombre, (respuesta) => {
-        if (respuesta && respuesta.exito) {
-          miNombre = respuesta.usuario.nombre;
-          localStorage.setItem('turno_nombre_usuario', miNombre);
+    function registrar(nombre) {
+      socket.emit('registrar-usuario', nombre, (res) => {
+        if (res && res.exito) {
+          miClave = res.usuario.clave;
+          miNombre = res.usuario.nombre;
+          localStorage.setItem('ruleta_clave_pc', miClave);
+          localStorage.setItem('ruleta_nombre_pc', miNombre);
           modalLogin.style.display = 'none';
-          usuarioLogueadoBarra.textContent = `Sesión activa como: ${miNombre}`;
-        } else {
-          alert(respuesta.mensaje || 'Error al iniciar sesión.');
+          infoUsuario.textContent = `PC asignada a: ${miNombre}`;
         }
       });
     }
 
-    // Auto-login si ya existe el nombre guardado en este navegador
-    if (miNombre) {
-      autenticarUsuario(miNombre);
-    }
+    if (miNombre) registrar(miNombre);
 
     btnIngresar.addEventListener('click', () => {
-      const valor = inputNombre.value.trim();
-      if (valor) {
-        autenticarUsuario(valor);
-      } else {
-        alert('Por favor, ingresa un nombre válido.');
+      const val = inputNombre.value.trim();
+      if (val) registrar(val);
+    });
+
+    btnEnTurno.addEventListener('click', () => {
+      socket.emit('siguiente-turno');
+    });
+
+    btnResetInvisible.addEventListener('click', () => {
+      if (confirm('¿Reiniciar ruleta y borrar todos los registros?')) {
+        socket.emit('reiniciar-sistema');
+        localStorage.clear();
+        location.reload();
       }
     });
 
-    inputNombre.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') btnIngresar.click();
-    });
+    // Dibujar la ruleta
+    socket.on('actualizar-ruleta', (usuarios) => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const total = usuarios.length;
 
-    // Eventos de botones de cambio de turno
-    btnPedirTurno.addEventListener('click', () => {
-      if (miNombre) {
-        socket.emit('iniciar-turno', miNombre);
-      } else {
-        modalLogin.style.display = 'flex';
+      if (total === 0) {
+        notificacionTurno.style.display = 'none';
+        return;
       }
-    });
 
-    btnFinalizarTurno.addEventListener('click', () => {
-      if (miNombre) {
-        socket.emit('finalizar-turno', miNombre);
-      } else {
-        modalLogin.style.display = 'flex';
-      }
-    });
+      const centroX = canvas.width / 2;
+      const centroY = canvas.height / 2;
+      const radio = canvas.width / 2;
+      const anguloPorSector = (2 * Math.PI) / total;
 
-    // Renderizado en tiempo real recibido de MongoDB
-    socket.on('actualizar-lista', (usuarios) => {
-      listaIzquierda.innerHTML = '';
-      listaDerecha.innerHTML = '';
+      // Dibujar sectores
+      // Desplazamos -Math.PI/2 para que el índice 0 empiece arriba donde está la flecha
+      usuarios.forEach((u, index) => {
+        const inicio = -Math.PI / 2 + (index * anguloPorSector);
+        const fin = inicio + anguloPorSector;
 
-      Object.values(usuarios).forEach((u) => {
-        const tarjeta = document.createElement('div');
-        tarjeta.className = 'tarjeta-usuario';
-        tarjeta.style.backgroundColor = u.color || '#3498db';
+        ctx.beginPath();
+        ctx.moveTo(centroX, centroY);
+        ctx.arc(centroX, centroY, radio, inicio, fin);
+        ctx.closePath();
+        ctx.fillStyle = u.color;
+        ctx.fill();
+        ctx.stroke();
 
-        const textoNombre = document.createElement('span');
-        textoNombre.textContent = u.nombre;
-        tarjeta.appendChild(textoNombre);
-
-        // Si es el usuario logueado en este dispositivo, agrega una etiqueta "(TÚ)"
-        if (miNombre && u.nombre.toLowerCase() === miNombre.toLowerCase()) {
-          const badge = document.createElement('span');
-          badge.className = 'indicador-yo';
-          badge.textContent = 'Tú';
-          tarjeta.appendChild(badge);
-        }
-
-        if (u.enTurno) {
-          // Columna izquierda (Técnico activo)
-          listaIzquierda.appendChild(tarjeta);
-        } else {
-          // Columna derecha (Sin técnico / Sin turno)
-          listaDerecha.appendChild(tarjeta);
-        }
+        // Texto del nombre
+        ctx.save();
+        ctx.translate(centroX, centroY);
+        ctx.rotate(inicio + anguloPorSector / 2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 18px Segoe UI";
+        ctx.fillText(u.nombre, radio - 20, 5);
+        ctx.restore();
       });
+
+      // Verificar si ESTA PC es la elegida (primer elemento de la lista)
+      const primerUsuario = usuarios[0];
+      if (miClave && primerUsuario && primerUsuario.clave === miClave) {
+        notificacionTurno.style.display = 'block';
+      } else {
+        notificacionTurno.style.display = 'none';
+      }
     });
   </script>
 </body>
