@@ -7,38 +7,31 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Servir archivos estáticos directamente desde la carpeta raíz
+// Servir archivos de la raíz
 app.use(express.static(__dirname));
 
-// Asegurar que la ruta principal sirva el index.html de la raíz
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Estado global de la aplicación
 let users = {}; // { socketId: { id, name, shiftsToday, consecutiveMisses, isTimeout, isTurn } }
 let currentTurnIndex = 0;
 let userOrder = [];
 let turnTimer = null;
 let turnTimeRemaining = 60;
 
-// Reiniciar contadores de turnos diarios a la medianoche (00:00)
+// Reset diario a la medianoche
 function setupDailyReset() {
   const now = new Date();
   const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
-  const timeToMidnight = nextMidnight - now;
-
   setTimeout(() => {
-    Object.keys(users).forEach(id => {
-      users[id].shiftsToday = 0;
-    });
+    Object.keys(users).forEach(id => { users[id].shiftsToday = 0; });
     io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
     setupDailyReset();
-  }, timeToMidnight);
+  }, nextMidnight - now);
 }
 setupDailyReset();
 
-// Gestión de tiempos para el turno activo
 function startTurnTimer() {
   clearInterval(turnTimer);
   turnTimeRemaining = 60;
@@ -69,7 +62,6 @@ function handleTurnAbsence(userId) {
 
 function nextTurn() {
   clearInterval(turnTimer);
-  
   if (userOrder.length === 0) return;
 
   userOrder.forEach(id => { if (users[id]) users[id].isTurn = false; });
@@ -132,7 +124,6 @@ io.on('connection', (socket) => {
   socket.on('toggleTimeout', () => {
     if (users[socket.id]) {
       users[socket.id].isTimeout = !users[socket.id].isTimeout;
-      
       if (users[socket.id].isTimeout && users[socket.id].isTurn) {
         users[socket.id].isTurn = false;
         nextTurn();
@@ -146,11 +137,7 @@ io.on('connection', (socket) => {
     if (users[targetUserId] && users[targetUserId].consecutiveMisses >= 2) {
       delete users[targetUserId];
       userOrder = userOrder.filter(id => id !== targetUserId);
-
-      if (currentTurnIndex >= userOrder.length) {
-        currentTurnIndex = 0;
-      }
-
+      if (currentTurnIndex >= userOrder.length) currentTurnIndex = 0;
       io.to(targetUserId).emit('kicked');
       io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
     }
@@ -162,14 +149,9 @@ io.on('connection', (socket) => {
     userOrder = userOrder.filter(id => id !== socket.id);
 
     if (userOrder.length > 0) {
-      if (currentTurnIndex >= userOrder.length) {
-        currentTurnIndex = 0;
-      }
-      if (wasActive) {
-        nextTurn();
-      } else {
-        io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
-      }
+      if (currentTurnIndex >= userOrder.length) currentTurnIndex = 0;
+      if (wasActive) nextTurn();
+      else io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
     } else {
       clearInterval(turnTimer);
       io.emit('stateUpdate', { users: {}, userOrder: [], currentTurnIndex: 0 });
@@ -179,5 +161,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Servidor iniciado en puerto ${PORT}`);
+  console.log(`Servidor activo en el puerto ${PORT}`);
 });
