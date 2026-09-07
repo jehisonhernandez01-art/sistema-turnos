@@ -7,7 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir archivos estáticos directamente desde la carpeta raíz
+app.use(express.static(__dirname));
+
+// Asegurar que la ruta principal sirva el index.html de la raíz
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Estado global de la aplicación
 let users = {}; // { socketId: { id, name, shiftsToday, consecutiveMisses, isTimeout, isTurn } }
@@ -27,7 +33,7 @@ function setupDailyReset() {
       users[id].shiftsToday = 0;
     });
     io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
-    setupDailyReset(); // Reprogramar para el siguiente día
+    setupDailyReset();
   }, timeToMidnight);
 }
 setupDailyReset();
@@ -66,7 +72,6 @@ function nextTurn() {
   
   if (userOrder.length === 0) return;
 
-  // Limpiar bandera de turno activo anterior
   userOrder.forEach(id => { if (users[id]) users[id].isTurn = false; });
 
   let attempts = 0;
@@ -89,8 +94,6 @@ function nextTurn() {
 }
 
 io.on('connection', (socket) => {
-  console.log('Usuario conectado:', socket.id);
-
   socket.on('joinRoom', (username) => {
     users[socket.id] = {
       id: socket.id,
@@ -114,7 +117,7 @@ io.on('connection', (socket) => {
   socket.on('acceptTurn', () => {
     if (users[socket.id] && users[socket.id].isTurn) {
       users[socket.id].shiftsToday += 1;
-      users[socket.id].consecutiveMisses = 0; // Reiniciar faltas tras tomar el turno
+      users[socket.id].consecutiveMisses = 0;
       users[socket.id].isTurn = false;
       nextTurn();
     }
@@ -130,7 +133,6 @@ io.on('connection', (socket) => {
     if (users[socket.id]) {
       users[socket.id].isTimeout = !users[socket.id].isTimeout;
       
-      // Si entra en tiempo fuera en medio de su turno, pasa al siguiente
       if (users[socket.id].isTimeout && users[socket.id].isTurn) {
         users[socket.id].isTurn = false;
         nextTurn();
@@ -177,5 +179,5 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+  console.log(`Servidor iniciado en puerto ${PORT}`);
 });
