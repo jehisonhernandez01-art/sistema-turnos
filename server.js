@@ -2,162 +2,180 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const mongoose = require('mongoose');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
+// Estado global de la aplicación
+let users = {}; // { socketId: { id, name, shiftsToday, consecutiveMisses, isTimeout, isTurn } }
+let currentTurnIndex = 0;
+let userOrder = [];
+let turnTimer = null;
+let turnTimeRemaining = 60;
 
-// Conexión a MongoDB Atlas
-const MONGO_URI = process.env.MONGO_URI;
+// Reiniciar contadores de turnos diarios a la medianoche (00:00)
+function setupDailyReset() {
+  const now = new Date();
+  const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
+  const timeToMidnight = nextMidnight - now;
 
-if (!MONGO_URI) {
-  console.error('CRÍTICO: No se ha configurado MONGO_URI.');
-} else {
-  mongoose.connect(MONGO_URI)
-    .then(() => console.log('Conectado a MongoDB Atlas'))
-    .catch((err) => console.error('Error en MongoDB:', err));
+  setTimeout(() => {
+    Object.keys(users).forEach(id => {
+      users[id].shiftsToday = 0;
+    });
+    io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
+    setupDailyReset(); // Reprogramar para el siguiente día
+  }, timeToMidnight);
+}
+setupDailyReset();
+
+// Gestión de tiempos para el turno activo
+function startTurnTimer() {
+  clearInterval(turnTimer);
+  turnTimeRemaining = 60;
+  
+  const activeUserId = userOrder[currentTurnIndex];
+  if (!activeUserId || !users[activeUserId]) return;
+
+  io.emit('turnTimerTick', { timeRemaining: turnTimeRemaining, userId: activeUserId });
+
+  turnTimer = setInterval(() => {
+    turnTimeRemaining--;
+    io.emit('turnTimerTick', { timeRemaining: turnTimeRemaining, userId: activeUserId });
+
+    if (turnTimeRemaining <= 0) {
+      clearInterval(turnTimer);
+      handleTurnAbsence(activeUserId);
+    }
+  }, 1000);
 }
 
-// Esquema de usuario con orden de llegada
-const usuarioSchema = new mongoose.Schema({
-  clave: { type: String, required: true, unique: true },
-  nombre: { type: String, required: true },
-  color: { type: String, required: true },
-  fechaRegistro: { type: Date, default: Date.now }
-});
-
-const Usuario = mongoose.model('UsuarioRuleta', usuarioSchema);
-
-const PALETA_COLORES = [
-  '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
-  '#e67e22', '#1abc9c', '#e84393', '#00cec9', '#6c5ce7'
-];
-
-async function obtenerColorUnico() {
-  const registrados = await Usuario.find({}, 'color');
-  const usados = registrados.map(u => u.color);
-  const disponibles = PALETA_COLORES.filter(c => !usados.includes(c));
-  if (disponibles.length > 0) {
-    return disponibles[Math.floor(Math.random() * disponibles.length)];
+function handleTurnAbsence(userId) {
+  if (users[userId]) {
+    users[userId].consecutiveMisses += 1;
+    users[userId].isTurn = false;
   }
-  return '#' + Math.floor(Math.random()*16777215).toString(16);
+  nextTurn();
 }
 
-// Retorna los usuarios ordenados por llegada
-async function obtenerEstadoRuleta() {
-  const usuarios = await Usuario.find().sort({ fechaRegistro: 1 });
-  return usuarios.map(u => ({
-    clave: u.clave,
-    nombre: u.nombre,
-    color: u.color
-  }));
+function nextTurn() {
+  clearInterval(turnTimer);
+  
+  if (userOrder.length === 0) return;
+
+  // Limpiar bandera de turno activo anterior
+  userOrder.forEach(id => { if (users[id]) users[id].isTurn = false; });
+
+  let attempts = 0;
+  do {
+    currentTurnIndex = (currentTurnIndex + 1) % userOrder.length;
+    attempts++;
+  } while (
+    users[userOrder[currentTurnIndex]] &&
+    users[userOrder[currentTurnIndex]].isTimeout &&
+    attempts < userOrder.length
+  );
+
+  const nextUserId = userOrder[currentTurnIndex];
+  if (nextUserId && users[nextUserId] && !users[nextUserId].isTimeout) {
+    users[nextUserId].isTurn = true;
+    startTurnTimer();
+  }
+
+  io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
 }
 
-// Contraseña para reiniciar el sistema
-const ADMIN_PASSWORD = '123'; // Puedes cambiar '123' por la clave que desees
+io.on('connection', (socket) => {
+  console.log('Usuario conectado:', socket.id);
 
-io.on('connection', async (socket) => {
-  // Enviar estado inicial al conectar
-  socket.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+  socket.on('joinRoom', (username) => {
+    users[socket.id] = {
+      id: socket.id,
+      name: username,
+      shiftsToday: 0,
+      consecutiveMisses: 0,
+      isTimeout: false,
+      isTurn: false
+    };
+    userOrder.push(socket.id);
 
-  // Registrar usuario
-  socket.on('registrar-usuario', async (nombreIngresado, callback) => {
-    if (!nombreIngresado) return;
-    const nombreLimpio = nombreIngresado.trim();
-    const claveNombre = nombreLimpio.toLowerCase();
+    if (userOrder.length === 1) {
+      users[socket.id].isTurn = true;
+      currentTurnIndex = 0;
+      startTurnTimer();
+    }
 
-    try {
-      let usuario = await Usuario.findOne({ clave: claveNombre });
+    io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
+  });
 
-      if (!usuario) {
-        const colorUnico = await obtenerColorUnico();
-        usuario = new Usuario({
-          clave: claveNombre,
-          nombre: nombreLimpio,
-          color: colorUnico
-        });
-        await usuario.save();
-      }
+  socket.on('acceptTurn', () => {
+    if (users[socket.id] && users[socket.id].isTurn) {
+      users[socket.id].shiftsToday += 1;
+      users[socket.id].consecutiveMisses = 0; // Reiniciar faltas tras tomar el turno
+      users[socket.id].isTurn = false;
+      nextTurn();
+    }
+  });
 
-      socket.nombreUsuario = claveNombre;
+  socket.on('busyTurn', () => {
+    if (users[socket.id] && users[socket.id].isTurn) {
+      handleTurnAbsence(socket.id);
+    }
+  });
 
-      if (typeof callback === 'function') {
-        callback({ exito: true, usuario: { nombre: usuario.nombre, clave: usuario.clave } });
-      }
-
-      io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
-    } catch (error) {
-      console.error('Error al registrar:', error);
-      if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Error al registrar el usuario.' });
+  socket.on('toggleTimeout', () => {
+    if (users[socket.id]) {
+      users[socket.id].isTimeout = !users[socket.id].isTimeout;
+      
+      // Si entra en tiempo fuera en medio de su turno, pasa al siguiente
+      if (users[socket.id].isTimeout && users[socket.id].isTurn) {
+        users[socket.id].isTurn = false;
+        nextTurn();
+      } else {
+        io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
       }
     }
   });
 
-  // Avanzar turno (El primer usuario pasa al final de la cola)
-  socket.on('siguiente-turno', async () => {
-    try {
-      const lista = await Usuario.find().sort({ fechaRegistro: 1 });
-      if (lista.length > 0) {
-        const primerUsuario = lista[0];
-        primerUsuario.fechaRegistro = new Date();
-        await primerUsuario.save();
+  socket.on('kickUser', (targetUserId) => {
+    if (users[targetUserId] && users[targetUserId].consecutiveMisses >= 2) {
+      delete users[targetUserId];
+      userOrder = userOrder.filter(id => id !== targetUserId);
 
-        io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+      if (currentTurnIndex >= userOrder.length) {
+        currentTurnIndex = 0;
       }
-    } catch (error) {
-      console.error('Error al avanzar turno:', error);
+
+      io.to(targetUserId).emit('kicked');
+      io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
     }
   });
 
-  // Finalizar conexión de un usuario específico
-  socket.on('finalizar-conexion', async (claveUsuario, callback) => {
-    if (!claveUsuario) return;
-    try {
-      await Usuario.deleteOne({ clave: claveUsuario });
-      io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
-      if (typeof callback === 'function') {
-        callback({ exito: true });
-      }
-    } catch (error) {
-      console.error('Error al finalizar conexión:', error);
-      if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Error al salir de la lista.' });
-      }
-    }
-  });
+  socket.on('disconnect', () => {
+    const wasActive = users[socket.id] && users[socket.id].isTurn;
+    delete users[socket.id];
+    userOrder = userOrder.filter(id => id !== socket.id);
 
-  // Reiniciar sistema con validación de contraseña
-  socket.on('reiniciar-sistema', async (passwordIngresada, callback) => {
-    if (passwordIngresada !== ADMIN_PASSWORD) {
-      if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Contraseña incorrecta. No se borrarán los usuarios.' });
+    if (userOrder.length > 0) {
+      if (currentTurnIndex >= userOrder.length) {
+        currentTurnIndex = 0;
       }
-      return;
-    }
-
-    try {
-      await Usuario.deleteMany({});
-      io.emit('actualizar-ruleta', []);
-      if (typeof callback === 'function') {
-        callback({ exito: true, mensaje: 'Sistema reiniciado exitosamente.' });
+      if (wasActive) {
+        nextTurn();
+      } else {
+        io.emit('stateUpdate', { users, userOrder, currentTurnIndex });
       }
-      console.log('Sistema de turnos reiniciado correctamente.');
-    } catch (error) {
-      console.error('Error al reiniciar:', error);
-      if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Error interno en el servidor al intentar reiniciar.' });
-      }
+    } else {
+      clearInterval(turnTimer);
+      io.emit('stateUpdate', { users: {}, userOrder: [], currentTurnIndex: 0 });
     }
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Servidor escuchando en el puerto ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+});
