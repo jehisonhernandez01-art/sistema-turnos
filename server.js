@@ -3,13 +3,17 @@ const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const mongoose = require('mongoose');
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
+
 app.use(express.static(__dirname));
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
 // Conexión a MongoDB Atlas
 const MONGO_URI = process.env.MONGO_URI;
 
@@ -20,8 +24,8 @@ if (!MONGO_URI) {
     .then(() => console.log('Conectado a MongoDB Atlas'))
     .catch((err) => console.error('Error en MongoDB:', err));
 }
-// Esquema de usuario con orden de llegada
 
+// Esquema de usuario con soporte para Tiempo Fuera
 const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
@@ -31,10 +35,12 @@ const usuarioSchema = new mongoose.Schema({
 });
 
 const Usuario = mongoose.model('UsuarioRuleta', usuarioSchema);
+
 const PALETA_COLORES = [
   '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
   '#e67e22', '#1abc9c', '#e84393', '#00cec9', '#6c5ce7'
 ];
+
 async function obtenerColorUnico() {
   const registrados = await Usuario.find({}, 'color');
   const usados = registrados.map(u => u.color);
@@ -42,11 +48,10 @@ async function obtenerColorUnico() {
   if (disponibles.length > 0) {
     return disponibles[Math.floor(Math.random() * disponibles.length)];
   }
-  return '#' + Math.floor(Math.random()*16777215).toString(16);
+  return '#' + Math.floor(Math.random() * 16777215).toString(16);
 }
 
 // Retorna los usuarios ordenados por llegada
-
 async function obtenerEstadoRuleta() {
   const usuarios = await Usuario.find().sort({ fechaRegistro: 1 });
   return usuarios.map(u => ({
@@ -56,16 +61,16 @@ async function obtenerEstadoRuleta() {
     enTiempoFuera: u.enTiempoFuera || false
   }));
 }
-// Contraseña para reiniciar el sistema
 
-const ADMIN_PASSWORD = '123'; // Puedes cambiar '123' por la clave que desees
+// Contraseña para reiniciar el sistema
+const ADMIN_PASSWORD = '123';
+
 io.on('connection', async (socket) => {
 
   // Enviar estado inicial al conectar
-
   socket.emit('actualizar-ruleta', await obtenerEstadoRuleta());
-  // Registrar usuario
 
+  // Registrar usuario
   socket.on('registrar-usuario', async (nombreIngresado, callback) => {
     if (!nombreIngresado) return;
     const nombreLimpio = nombreIngresado.trim();
@@ -77,7 +82,8 @@ io.on('connection', async (socket) => {
         usuario = new Usuario({
           clave: claveNombre,
           nombre: nombreLimpio,
-          color: colorUnico
+          color: colorUnico,
+          enTiempoFuera: false
         });
         await usuario.save();
       }
@@ -94,12 +100,12 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Avanzar turno (El primer usuario pasa al final de la cola)
-
+  // Avanzar turno
   socket.on('siguiente-turno', async () => {
     try {
       const lista = await Usuario.find().sort({ fechaRegistro: 1 });
       if (lista.length > 0) {
+        // Pone al usuario en turno al final de la cola
         const primerUsuario = lista[0];
         primerUsuario.fechaRegistro = new Date();
         await primerUsuario.save();
@@ -109,7 +115,9 @@ io.on('connection', async (socket) => {
       console.error('Error al avanzar turno:', error);
     }
   });
-socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
+
+  // Cambiar estado de Tiempo Fuera
+  socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
     if (!claveUsuario) return;
     try {
       const usuario = await Usuario.findOne({ clave: claveUsuario });
@@ -119,25 +127,24 @@ socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
       }
     } catch (error) {
-      console.error('Error al cambiar tiempo fuera:', error);
+      console.error('Error en tiempo fuera:', error);
     }
   });
 
-  // Expulsar usuario inactivo (Kick)
+  // Expulsar usuario (Kick)
   socket.on('expulsar-usuario', async (claveUsuario, callback) => {
     if (!claveUsuario) return;
     try {
       await Usuario.deleteOne({ clave: claveUsuario });
       io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
-      if (typeof callback === 'function') {
-        callback({ exito: true });
-      }
+      if (typeof callback === 'function') callback({ exito: true });
     } catch (error) {
       console.error('Error al expulsar usuario:', error);
+      if (typeof callback === 'function') callback({ exito: false });
     }
   });
-  // Finalizar conexión de un usuario específico
 
+  // Finalizar conexión de un usuario específico
   socket.on('finalizar-conexion', async (claveUsuario, callback) => {
     if (!claveUsuario) return;
     try {
@@ -153,6 +160,7 @@ socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
       }
     }
   });
+
   // Reiniciar sistema con validación de contraseña
   socket.on('reiniciar-sistema', async (passwordIngresada, callback) => {
     if (passwordIngresada !== ADMIN_PASSWORD) {
@@ -176,5 +184,6 @@ socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
     }
   });
 });
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Servidor escuchando en el puerto ${PORT}`));
