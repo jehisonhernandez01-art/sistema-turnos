@@ -140,9 +140,10 @@
 <body>
   <!-- Botones de Control Siempre Visibles por Encima de Todo -->
   <div class="header-botones-flotantes">
-    <button id="btnSalirTurno" class="btn-salir" style="display: none;">Finalizar Conexión</button>
-    <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
-  </div>
+  <button id="btnTiempoFuera" class="btn-salir" style="display: none; background-color: #f39c12;">⏱️ Tiempo Fuera</button>
+  <button id="btnSalirTurno" class="btn-salir" style="display: none;">Finalizar Conexión</button>
+  <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
+</div>
   <!-- Modal Registro de Usuario -->
   <div id="modalLogin" class="modal-overlay">
     <div class="modal-box">
@@ -156,24 +157,26 @@
   </div>
   <!-- Modal Emergente Gigante de Notificación de Turno -->
   <div id="modalTurnoEmergente" class="modal-turno-overlay">
-    <div class="modal-turno-box">
-      <h2 id="tituloModalTurno">¡ES TU TURNO!</h2>
-      <!-- Nombre del usuario resaltado -->
-      <h1 id="nombreTurnoActual" style="
-        font-size: 38px;
-        color: #2c3e50;
-        background: #f1c40f;
-        padding: 12px 20px;
-        border-radius: 10px;
-        margin: 15px 0;
-        word-break: break-word;
-        text-transform: uppercase;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-      "></h1>
-      <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.</p>
-      <button id="btnEnTurno">EN TURNO</button>
+  <div class="modal-turno-box">
+    <h2 id="tituloModalTurno">¡ES TU TURNO!</h2>
+    <h1 id="nombreTurnoActual" style="
+      font-size: 38px; color: #2c3e50; background: #f1c40f; padding: 12px 20px;
+      border-radius: 10px; margin: 15px 0; word-break: break-word; text-transform: uppercase;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    "></h1>
+    <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico.</p>
+    
+    <!-- Temporizador de 60 Segundos -->
+    <div id="contenedorTimer" style="font-size: 24px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
+      Tiempo restante: <span id="contadorSegundos">60</span>s
+    </div>
+
+    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+      <button id="btnEnTurno">Tomar Turno</button>
+      <button id="btnOcupado" style="background: #e67e22; color: #fff; border: none; padding: 16px 25px; font-size: 22px; font-weight: bold; border-radius: 8px; cursor: pointer;">Ocupado</button>
     </div>
   </div>
+</div>
   <header>
     <div>
       <h1 style="font-size: 22px;">Ruleta de Turnos</h1>
@@ -181,6 +184,7 @@
     </div>
   </header>
   <div class="ruleta-container">
+    <div id="listaUsuariosKick" style="max-width: 500px; margin: 30px auto; text-align: left;"></div>
     <div class="flecha-indicadora"></div>
     <canvas id="canvasRuleta" width="400" height="400"></canvas>
   </div>
@@ -201,6 +205,14 @@
     const btnEnTurno = document.getElementById('btnEnTurno');
     const btnSalirTurno = document.getElementById('btnSalirTurno');
     const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
+    let contadorIntervalo = null;
+let segundosRestantes = 60;
+let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
+const btnTiempoFuera = document.getElementById('btnTiempoFuera');
+const btnOcupado = document.getElementById('btnOcupado');
+const contadorSegundos = document.getElementById('contadorSegundos');
+const contenedorTimer = document.getElementById('contenedorTimer');
+const listaUsuariosKick = document.getElementById('listaUsuariosKick');
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
     let esSoloVista = localStorage.getItem('ruleta_solo_vista') === 'true';
@@ -214,6 +226,7 @@
           localStorage.setItem('ruleta_nombre_pc', miNombre);
           localStorage.removeItem('ruleta_solo_vista');
           modalLogin.style.display = 'none';
+          btnTiempoFuera.style.display = 'inline-block';
           btnSalirTurno.style.display = 'inline-block';
           infoUsuario.textContent = `PC asignada a: ${miNombre}`;
         }
@@ -237,6 +250,47 @@
     } else if (miNombre) {
       registrar(miNombre);
     }
+    function iniciarCuentaRegresiva(claveUsuarioActual) {
+  detenerCuentaRegresiva();
+  segundosRestantes = 60;
+  contadorSegundos.textContent = segundosRestantes;
+  contenedorTimer.style.display = 'block';
+
+  contadorIntervalo = setInterval(() => {
+    segundosRestantes--;
+    contadorSegundos.textContent = segundosRestantes;
+
+    if (segundosRestantes <= 0) {
+      detenerCuentaRegresiva();
+      // Marcar usuario como inactivo para activar Kick
+      usuariosInactivosList[claveUsuarioActual] = true;
+      localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
+      socket.emit('siguiente-turno');
+    }
+  }, 1000);
+}
+
+function detenerCuentaRegresiva() {
+  if (contadorIntervalo) {
+    clearInterval(contadorIntervalo);
+    contadorIntervalo = null;
+  }
+}
+
+btnEnTurno.addEventListener('click', () => {
+  detenerCuentaRegresiva();
+  // Limpia inactividad si tomó el turno a tiempo
+  if (miClave && usuariosInactivosList[miClave]) {
+    delete usuariosInactivosList[miClave];
+    localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
+  }
+  socket.emit('siguiente-turno');
+});
+
+btnOcupado.addEventListener('click', () => {
+  detenerCuentaRegresiva();
+  socket.emit('siguiente-turno');
+});
     btnIngresar.addEventListener('click', () => {
       const val = inputNombre.value.trim();
       if (val) registrar(val);
@@ -275,10 +329,30 @@
         });
       }
     });
+    btnTiempoFuera.addEventListener('click', () => {
+      socket.emit('toggle-tiempo-fuera', miClave);
+    });
+    btnOcupado.addEventListener('click', () => {
+      detenerCuentaRegresiva();
+      socket.emit('siguiente-turno');
+    });
     // Dibujar la ruleta alineando automáticamente al usuario en turno con la flecha superior
     socket.on('actualizar-ruleta', (usuarios) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
+      const usuariosActivos = usuarios.filter(u => !u.enTiempoFuera);
+const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
+      const miUsuarioObj = usuarios.find(u => u.clave === miClave);
+      if (miUsuarioObj) {
+        btnTiempoFuera.textContent = miUsuarioObj.enTiempoFuera ? '▶️ Volver al Turno' : '⏱️ Tiempo Fuera';
+        btnTiempoFuera.style.backgroundColor = miUsuarioObj.enTiempoFuera ? '#2ecc71' : '#f39c12';
+      }
+
+      if (total === 0) {
+        modalTurnoEmergente.style.display = 'none';
+        detenerCuentaRegresiva();
+        return;
+      }
       if (total === 0) {
         modalTurnoEmergente.style.display = 'none';
         return;
@@ -310,6 +384,22 @@
         ctx.fillText(u.nombre, radio - 20, 6);
         ctx.restore();
       });
+      listaUsuariosKick.innerHTML = '<h3 style="margin-bottom:10px; text-align:center;">Lista de Participantes</h3>';
+      usuarios.forEach(u => {
+        const esInactivo = usuariosInactivosList[u.clave];
+        const item = document.createElement('div');
+        item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 12px; margin-bottom:5px; background:#2d3436; border-radius:6px;';
+        
+        let html = `<span><strong style="color:${u.color}">● ${u.nombre}</strong> ${u.enTiempoFuera ? '<i>(Tiempo Fuera)</i>' : ''}</span>`;
+        
+        // Habilitar botón Kick únicamente si el usuario no presionó botones tras 60s
+        if (esInactivo && u.clave !== miClave) {
+          html += `<button onclick="expulsar('${u.clave}')" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Kick 🚫</button>`;
+        }
+        
+        item.innerHTML = html;
+        listaUsuariosKick.appendChild(item);
+      });
       // Lógica de visualización de emergentes
       const primerUsuario = usuarios[0];
       if (esSoloVista) {
@@ -329,6 +419,16 @@
         tituloModalTurno.textContent = "¡ES TU TURNO!";
         descripcionModalTurno.textContent = "Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.";
         if (miClave && primerUsuario && primerUsuario.clave === miClave) {
+  nombreTurnoActual.textContent = primerUsuario.nombre;
+  modalTurnoEmergente.style.display = 'flex';
+  if (!contadorIntervalo) {
+    iniciarCuentaRegresiva(primerUsuario.clave);
+  }
+} else {
+  detenerCuentaRegresiva();
+  if (!esSoloVista) modalTurnoEmergente.style.display = 'none';
+}
+        if (miClave && primerUsuario && primerUsuario.clave === miClave) {
           nombreTurnoActual.textContent = primerUsuario.nombre;
           modalTurnoEmergente.style.display = 'flex';
         } else {
@@ -336,6 +436,14 @@
         }
       }
     });
+    window.expulsar = function(claveUsuario) {
+      if (confirm('¿Deseas expulsar a este usuario inactivo del sistema?')) {
+        socket.emit('expulsar-usuario', claveUsuario, () => {
+          delete usuariosInactivosList[claveUsuario];
+          localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
+        });
+      }
+    };
   </script>
 </body>
 </html> 
