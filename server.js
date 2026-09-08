@@ -26,6 +26,7 @@ const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
   color: { type: String, required: true },
+  enTiempoFuera: { type: Boolean, default: false },
   fechaRegistro: { type: Date, default: Date.now }
 });
 
@@ -51,7 +52,8 @@ async function obtenerEstadoRuleta() {
   return usuarios.map(u => ({
     clave: u.clave,
     nombre: u.nombre,
-    color: u.color
+    color: u.color,
+    enTiempoFuera: u.enTiempoFuera || false
   }));
 }
 // Contraseña para reiniciar el sistema
@@ -107,7 +109,33 @@ io.on('connection', async (socket) => {
       console.error('Error al avanzar turno:', error);
     }
   });
+socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
+    if (!claveUsuario) return;
+    try {
+      const usuario = await Usuario.findOne({ clave: claveUsuario });
+      if (usuario) {
+        usuario.enTiempoFuera = !usuario.enTiempoFuera;
+        await usuario.save();
+        io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+      }
+    } catch (error) {
+      console.error('Error al cambiar tiempo fuera:', error);
+    }
+  });
 
+  // Expulsar usuario inactivo (Kick)
+  socket.on('expulsar-usuario', async (claveUsuario, callback) => {
+    if (!claveUsuario) return;
+    try {
+      await Usuario.deleteOne({ clave: claveUsuario });
+      io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+      if (typeof callback === 'function') {
+        callback({ exito: true });
+      }
+    } catch (error) {
+      console.error('Error al expulsar usuario:', error);
+    }
+  });
   // Finalizar conexión de un usuario específico
 
   socket.on('finalizar-conexion', async (claveUsuario, callback) => {
