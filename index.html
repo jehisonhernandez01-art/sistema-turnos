@@ -134,7 +134,7 @@
     }
     #btnOcupado:active { transform: scale(0.96); }
 
-    /* Ruleta */
+    /* Ruleta y Animación de Giro */
     .ruleta-container {
       position: relative; width: 360px; height: 360px; margin: 20px auto;
     }
@@ -149,6 +149,7 @@
     canvas {
       width: 100%; height: 100%; border-radius: 50%;
       box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      transition: transform 1.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     }
   </style>
 </head>
@@ -186,7 +187,7 @@
       
       <!-- Contador Regresivo -->
       <div id="contenedorTimer" style="font-size: 22px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
-        Cambio automático en: <span id="contadorSegundos">60</span>s
+        Cambio automático en: <span id="contadorSegundos">180</span>s
       </div>
 
       <div style="display: flex; gap: 10px; justify-content: center;">
@@ -240,8 +241,9 @@
     let esSoloVista = localStorage.getItem('ruleta_solo_vista') === 'true';
     
     let contadorIntervalo = null;
-    let segundosRestantes = 60;
+    let segundosRestantes = 180; // 3 minutos
     let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
+    let rotacionActual = 0;
 
     function registrar(nombre) {
       mensajeErrorLogin.style.display = 'none';
@@ -297,9 +299,10 @@
       socket.emit('toggle-tiempo-fuera', miClave);
     });
 
+    // Temporizador de 3 minutos (180s)
     function iniciarCuentaRegresiva(claveUsuarioActual) {
       detenerCuentaRegresiva();
-      segundosRestantes = 60;
+      segundosRestantes = 180;
       contadorSegundos.textContent = segundosRestantes;
       contenedorTimer.style.display = 'block';
 
@@ -311,7 +314,9 @@
           detenerCuentaRegresiva();
           usuariosInactivosList[claveUsuarioActual] = true;
           localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
-          socket.emit('siguiente-turno', 'ocupado');
+          
+          // No cuenta como ocupado
+          socket.emit('siguiente-turno', 'automatico');
         }
       }, 1000);
     }
@@ -365,6 +370,12 @@
       }
     });
 
+    // Escuchar la animación de giro de 1 vuelta completa (360°)
+    socket.on('girar-ruleta', () => {
+      rotacionActual += 360;
+      canvas.style.transform = `rotate(${rotacionActual}deg)`;
+    });
+
     socket.on('actualizar-ruleta', (usuarios) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
@@ -413,7 +424,6 @@
         ctx.fillStyle = "#fff";
         ctx.font = "bold 15px Segoe UI";
         
-        // Formatear texto con nombre, estado de pausa y contadores
         const textoPausa = u.enTiempoFuera ? ' (PAUSA)' : '';
         const textoContadores = ` [🟢${u.turnosAtendidos || 0} | 🟡${u.saltosOcupado || 0}]`;
         
@@ -421,7 +431,7 @@
         ctx.restore();
       });
 
-      // Lista de usuarios y botón Kick con desglose de contadores
+      // Lista de usuarios y botón Kick
       listaUsuariosKick.innerHTML = '<h3 style="margin-bottom:10px; text-align:center;">Participantes</h3>';
       usuarios.forEach(u => {
         const esInactivo = usuariosInactivosList[u.clave];
