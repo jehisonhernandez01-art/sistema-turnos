@@ -16,12 +16,11 @@
       padding-bottom: 10px;
       border-bottom: 1px solid #3d3d3d;
     }
-    /* Contenedor Flotante Superior para Garantizar Máxima Visibilidad */
     .header-botones-flotantes {
       position: fixed;
       top: 15px;
       right: 15px;
-      z-index: 10001; /* Colocado por encima de los modales emergentes */
+      z-index: 10001;
       display: flex;
       gap: 10px;
       background: rgba(30, 39, 46, 0.9);
@@ -54,6 +53,7 @@
     }
     .btn-reiniciar:hover { background-color: #ff6b81; }
     .btn-reiniciar:active { transform: scale(0.95); }
+    
     /* Modal Registro */
     .modal-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -72,6 +72,7 @@
     }
     .btn-ingresar { background: #00cec9; }
     .btn-solo-vista { background: #0984e3; }
+    
     /* Notificación Emergente Gigante de Turno Activo */
     .modal-turno-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -104,14 +105,14 @@
     .modal-turno-box p {
       font-size: 18px;
       color: #555;
-      margin-bottom: 25px;
+      margin-bottom: 20px;
     }
     #btnEnTurno {
       background: #27ae60;
       color: #ffffff;
       border: none;
-      padding: 16px 35px;
-      font-size: 22px;
+      padding: 16px 25px;
+      font-size: 20px;
       font-weight: bold;
       border-radius: 8px;
       cursor: pointer;
@@ -119,6 +120,20 @@
       transition: transform 0.1s;
     }
     #btnEnTurno:active { transform: scale(0.96); }
+    #btnOcupado {
+      background: #e67e22;
+      color: #ffffff;
+      border: none;
+      padding: 16px 25px;
+      font-size: 20px;
+      font-weight: bold;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(230, 126, 34, 0.4);
+      transition: transform 0.1s;
+    }
+    #btnOcupado:active { transform: scale(0.96); }
+
     /* Ruleta */
     .ruleta-container {
       position: relative; width: 360px; height: 360px; margin: 20px auto;
@@ -138,13 +153,14 @@
   </style>
 </head>
 <body>
-  <!-- Botones de Control Siempre Visibles por Encima de Todo -->
+  <!-- Botones Flotantes -->
   <div class="header-botones-flotantes">
-  <button id="btnTiempoFuera" class="btn-salir" style="display: none; background-color: #f39c12;">⏱️ Tiempo Fuera</button>
-  <button id="btnSalirTurno" class="btn-salir" style="display: none;">Finalizar Conexión</button>
-  <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
-</div>
-  <!-- Modal Registro de Usuario -->
+    <button id="btnTiempoFuera" class="btn-salir" style="display: none; background-color: #f39c12;">⏱️ Tiempo Fuera</button>
+    <button id="btnSalirTurno" class="btn-salir" style="display: none;">Finalizar Conexión</button>
+    <button id="btnReiniciarGeneral" class="btn-reiniciar">Reiniciar Usuarios</button>
+  </div>
+
+  <!-- Modal Registro -->
   <div id="modalLogin" class="modal-overlay">
     <div class="modal-box">
       <h2>Asignación de PC</h2>
@@ -155,39 +171,45 @@
       <button id="btnSoloVista" class="btn-solo-vista">👁️ Acceder en Solo Vista</button>
     </div>
   </div>
-  <!-- Modal Emergente Gigante de Notificación de Turno -->
-  <div id="modalTurnoEmergente" class="modal-turno-overlay">
-  <div class="modal-turno-box">
-    <h2 id="tituloModalTurno">¡ES TU TURNO!</h2>
-    <h1 id="nombreTurnoActual" style="
-      font-size: 38px; color: #2c3e50; background: #f1c40f; padding: 12px 20px;
-      border-radius: 10px; margin: 15px 0; word-break: break-word; text-transform: uppercase;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-    "></h1>
-    <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico.</p>
-    
-    <!-- Temporizador de 60 Segundos -->
-    <div id="contenedorTimer" style="font-size: 24px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
-      Tiempo restante: <span id="contadorSegundos">60</span>s
-    </div>
 
-    <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-      <button id="btnEnTurno">Tomar Turno</button>
-      <button id="btnOcupado" style="background: #e67e22; color: #fff; border: none; padding: 16px 25px; font-size: 22px; font-weight: bold; border-radius: 8px; cursor: pointer;">Ocupado</button>
+  <!-- Modal Turno Emergente -->
+  <div id="modalTurnoEmergente" class="modal-turno-overlay">
+    <div class="modal-turno-box">
+      <h2 id="tituloModalTurno">¡ES TU TURNO!</h2>
+      <h1 id="nombreTurnoActual" style="
+        font-size: 38px; color: #2c3e50; background: #f1c40f; padding: 12px 20px;
+        border-radius: 10px; margin: 15px 0; word-break: break-word; text-transform: uppercase;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      "></h1>
+      <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico.</p>
+      
+      <!-- Contador Regresivo -->
+      <div id="contenedorTimer" style="font-size: 22px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
+        Cambio automático en: <span id="contadorSegundos">60</span>s
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="btnEnTurno">Tomar Turno</button>
+        <button id="btnOcupado">Ocupado</button>
+      </div>
     </div>
   </div>
-</div>
+
   <header>
     <div>
       <h1 style="font-size: 22px;">Ruleta de Turnos</h1>
       <p id="infoUsuario" style="color: #00cec9; text-align: left; font-size: 14px; margin-top: 3px;"></p>
     </div>
   </header>
+
   <div class="ruleta-container">
-    <div id="listaUsuariosKick" style="max-width: 500px; margin: 30px auto; text-align: left;"></div>
     <div class="flecha-indicadora"></div>
     <canvas id="canvasRuleta" width="400" height="400"></canvas>
   </div>
+
+  <!-- Lista de Usuarios y Botón Kick -->
+  <div id="listaUsuariosKick" style="max-width: 450px; margin: 25px auto; text-align: left;"></div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script>
     const socket = io();
@@ -203,19 +225,22 @@
     const tituloModalTurno = document.getElementById('tituloModalTurno');
     const descripcionModalTurno = document.getElementById('descripcionModalTurno');
     const btnEnTurno = document.getElementById('btnEnTurno');
+    const btnOcupado = document.getElementById('btnOcupado');
     const btnSalirTurno = document.getElementById('btnSalirTurno');
     const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
-    let contadorIntervalo = null;
-let segundosRestantes = 60;
-let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
-const btnTiempoFuera = document.getElementById('btnTiempoFuera');
-const btnOcupado = document.getElementById('btnOcupado');
-const contadorSegundos = document.getElementById('contadorSegundos');
-const contenedorTimer = document.getElementById('contenedorTimer');
-const listaUsuariosKick = document.getElementById('listaUsuariosKick');
+    const btnTiempoFuera = document.getElementById('btnTiempoFuera');
+    const contadorSegundos = document.getElementById('contadorSegundos');
+    const contenedorTimer = document.getElementById('contenedorTimer');
+    const listaUsuariosKick = document.getElementById('listaUsuariosKick');
+
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
     let esSoloVista = localStorage.getItem('ruleta_solo_vista') === 'true';
+    
+    let contadorIntervalo = null;
+    let segundosRestantes = 60;
+    let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
+
     function registrar(nombre) {
       socket.emit('registrar-usuario', nombre, (res) => {
         if (res && res.exito) {
@@ -226,12 +251,13 @@ const listaUsuariosKick = document.getElementById('listaUsuariosKick');
           localStorage.setItem('ruleta_nombre_pc', miNombre);
           localStorage.removeItem('ruleta_solo_vista');
           modalLogin.style.display = 'none';
-          btnTiempoFuera.style.display = 'inline-block';
           btnSalirTurno.style.display = 'inline-block';
+          btnTiempoFuera.style.display = 'inline-block';
           infoUsuario.textContent = `PC asignada a: ${miNombre}`;
         }
       });
     }
+
     function activarSoloVista() {
       esSoloVista = true;
       miClave = '';
@@ -241,67 +267,70 @@ const listaUsuariosKick = document.getElementById('listaUsuariosKick');
       localStorage.setItem('ruleta_solo_vista', 'true');
       modalLogin.style.display = 'none';
       btnSalirTurno.style.display = 'none';
+      btnTiempoFuera.style.display = 'none';
       infoUsuario.textContent = `Modo: Solo Vista (Monitor Central)`;
       infoUsuario.style.color = '#0984e3';
     }
-    // Auto-login o restaurar modo
+
     if (esSoloVista) {
       activarSoloVista();
     } else if (miNombre) {
       registrar(miNombre);
     }
-    function iniciarCuentaRegresiva(claveUsuarioActual) {
-  detenerCuentaRegresiva();
-  segundosRestantes = 60;
-  contadorSegundos.textContent = segundosRestantes;
-  contenedorTimer.style.display = 'block';
 
-  contadorIntervalo = setInterval(() => {
-    segundosRestantes--;
-    contadorSegundos.textContent = segundosRestantes;
-
-    if (segundosRestantes <= 0) {
-      detenerCuentaRegresiva();
-      // Marcar usuario como inactivo para activar Kick
-      usuariosInactivosList[claveUsuarioActual] = true;
-      localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
-      socket.emit('siguiente-turno');
-    }
-  }, 1000);
-}
-
-function detenerCuentaRegresiva() {
-  if (contadorIntervalo) {
-    clearInterval(contadorIntervalo);
-    contadorIntervalo = null;
-  }
-}
-
-btnEnTurno.addEventListener('click', () => {
-  detenerCuentaRegresiva();
-  // Limpia inactividad si tomó el turno a tiempo
-  if (miClave && usuariosInactivosList[miClave]) {
-    delete usuariosInactivosList[miClave];
-    localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
-  }
-  socket.emit('siguiente-turno');
-});
-
-btnOcupado.addEventListener('click', () => {
-  detenerCuentaRegresiva();
-  socket.emit('siguiente-turno');
-});
     btnIngresar.addEventListener('click', () => {
       const val = inputNombre.value.trim();
       if (val) registrar(val);
     });
+
     btnSoloVista.addEventListener('click', () => {
       activarSoloVista();
     });
+
+    btnTiempoFuera.addEventListener('click', () => {
+      socket.emit('toggle-tiempo-fuera', miClave);
+    });
+
+    function iniciarCuentaRegresiva(claveUsuarioActual) {
+      detenerCuentaRegresiva();
+      segundosRestantes = 60;
+      contadorSegundos.textContent = segundosRestantes;
+      contenedorTimer.style.display = 'block';
+
+      contadorIntervalo = setInterval(() => {
+        segundosRestantes--;
+        contadorSegundos.textContent = segundosRestantes;
+
+        if (segundosRestantes <= 0) {
+          detenerCuentaRegresiva();
+          usuariosInactivosList[claveUsuarioActual] = true;
+          localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
+          socket.emit('siguiente-turno');
+        }
+      }, 1000);
+    }
+
+    function detenerCuentaRegresiva() {
+      if (contadorIntervalo) {
+        clearInterval(contadorIntervalo);
+        contadorIntervalo = null;
+      }
+    }
+
     btnEnTurno.addEventListener('click', () => {
+      detenerCuentaRegresiva();
+      if (miClave && usuariosInactivosList[miClave]) {
+        delete usuariosInactivosList[miClave];
+        localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
+      }
       socket.emit('siguiente-turno');
     });
-    // Salir de la lista de turnos y finalizar conexión
+
+    btnOcupado.addEventListener('click', () => {
+      detenerCuentaRegresiva();
+      socket.emit('siguiente-turno');
+    });
+
     btnSalirTurno.addEventListener('click', () => {
       if (confirm('¿Estás seguro de que deseas salir de la lista de turnos?')) {
         socket.emit('finalizar-conexion', miClave, (respuesta) => {
@@ -314,7 +343,7 @@ btnOcupado.addEventListener('click', () => {
         });
       }
     });
-    // Botón de reinicio protegido con contraseña
+
     btnReiniciarGeneral.addEventListener('click', () => {
       const password = prompt('🔐 Ingresa la contraseña de administrador para borrar todos los usuarios:');
       if (password) {
@@ -329,19 +358,16 @@ btnOcupado.addEventListener('click', () => {
         });
       }
     });
-    btnTiempoFuera.addEventListener('click', () => {
-      socket.emit('toggle-tiempo-fuera', miClave);
-    });
-    btnOcupado.addEventListener('click', () => {
-      detenerCuentaRegresiva();
-      socket.emit('siguiente-turno');
-    });
-    // Dibujar la ruleta alineando automáticamente al usuario en turno con la flecha superior
+
     socket.on('actualizar-ruleta', (usuarios) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
+
+      // Filtrar los usuarios que están en Tiempo Fuera
       const usuariosActivos = usuarios.filter(u => !u.enTiempoFuera);
-const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
+      const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
+
+      // Botón Tiempo Fuera
       const miUsuarioObj = usuarios.find(u => u.clave === miClave);
       if (miUsuarioObj) {
         btnTiempoFuera.textContent = miUsuarioObj.enTiempoFuera ? '▶️ Volver al Turno' : '⏱️ Tiempo Fuera';
@@ -351,40 +377,41 @@ const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
       if (total === 0) {
         modalTurnoEmergente.style.display = 'none';
         detenerCuentaRegresiva();
+        listaUsuariosKick.innerHTML = '';
         return;
       }
-      if (total === 0) {
-        modalTurnoEmergente.style.display = 'none';
-        return;
-      }
+
+      // Dibujar Canvas
       const centroX = canvas.width / 2;
       const centroY = canvas.height / 2;
       const radio = canvas.width / 2;
       const anguloPorSector = (2 * Math.PI) / total;
-      // Desfase para alinear el centro del primer sector justo en las 12 en punto (donde apunta la flecha)
       const offset = -Math.PI / 2 - (anguloPorSector / 2);
+
       usuarios.forEach((u, index) => {
         const inicio = offset + (index * anguloPorSector);
         const fin = inicio + anguloPorSector;
-        // Dibujar rebanada
+
         ctx.beginPath();
         ctx.moveTo(centroX, centroY);
         ctx.arc(centroX, centroY, radio, inicio, fin);
         ctx.closePath();
-        ctx.fillStyle = u.color;
+        ctx.fillStyle = u.enTiempoFuera ? '#7f8c8d' : u.color;
         ctx.fill();
         ctx.stroke();
-        // Dibujar texto
+
         ctx.save();
         ctx.translate(centroX, centroY);
         ctx.rotate(inicio + anguloPorSector / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#fff";
         ctx.font = "bold 18px Segoe UI";
-        ctx.fillText(u.nombre, radio - 20, 6);
+        ctx.fillText(u.nombre + (u.enTiempoFuera ? ' (PAUSA)' : ''), radio - 20, 6);
         ctx.restore();
       });
-      listaUsuariosKick.innerHTML = '<h3 style="margin-bottom:10px; text-align:center;">Lista de Participantes</h3>';
+
+      // Lista de usuarios y botón Kick
+      listaUsuariosKick.innerHTML = '<h3 style="margin-bottom:10px; text-align:center;">Participantes</h3>';
       usuarios.forEach(u => {
         const esInactivo = usuariosInactivosList[u.clave];
         const item = document.createElement('div');
@@ -392,7 +419,6 @@ const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
         
         let html = `<span><strong style="color:${u.color}">● ${u.nombre}</strong> ${u.enTiempoFuera ? '<i>(Tiempo Fuera)</i>' : ''}</span>`;
         
-        // Habilitar botón Kick únicamente si el usuario no presionó botones tras 60s
         if (esInactivo && u.clave !== miClave) {
           html += `<button onclick="expulsar('${u.clave}')" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Kick 🚫</button>`;
         }
@@ -400,42 +426,40 @@ const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
         item.innerHTML = html;
         listaUsuariosKick.appendChild(item);
       });
-      // Lógica de visualización de emergentes
-      const primerUsuario = usuarios[0];
+
+      // Visibilidad del Modal Emergente
       if (esSoloVista) {
-        // En modo Solo Vista se muestra el aviso de quién está en turno sin requerir interactuar obligatoriamente
         if (primerUsuario) {
           tituloModalTurno.textContent = "TURNO ACTUAL";
           nombreTurnoActual.textContent = primerUsuario.nombre;
           descripcionModalTurno.textContent = "Atención asignada actualmente con el Técnico.";
-          btnEnTurno.style.display = "none"; // Oculta el botón para evitar avances accidentales desde el monitor
+          btnEnTurno.style.display = "none";
+          btnOcupado.style.display = "none";
+          contenedorTimer.style.display = "none";
           modalTurnoEmergente.style.display = 'flex';
         } else {
           modalTurnoEmergente.style.display = 'none';
         }
       } else {
-        // En modo Participante solo se despliega en la PC correspondiente
         btnEnTurno.style.display = "inline-block";
+        btnOcupado.style.display = "inline-block";
         tituloModalTurno.textContent = "¡ES TU TURNO!";
-        descripcionModalTurno.textContent = "Tienes la atención asignada con el Técnico. Haz clic en el botón para confirmar e iniciar.";
-        if (miClave && primerUsuario && primerUsuario.clave === miClave) {
-  nombreTurnoActual.textContent = primerUsuario.nombre;
-  modalTurnoEmergente.style.display = 'flex';
-  if (!contadorIntervalo) {
-    iniciarCuentaRegresiva(primerUsuario.clave);
-  }
-} else {
-  detenerCuentaRegresiva();
-  if (!esSoloVista) modalTurnoEmergente.style.display = 'none';
-}
+        descripcionModalTurno.textContent = "Tienes la atención asignada con el Técnico. Haz clic para confirmar o indicar que estás ocupado.";
+
         if (miClave && primerUsuario && primerUsuario.clave === miClave) {
           nombreTurnoActual.textContent = primerUsuario.nombre;
           modalTurnoEmergente.style.display = 'flex';
+          
+          if (!contadorIntervalo) {
+            iniciarCuentaRegresiva(primerUsuario.clave);
+          }
         } else {
+          detenerCuentaRegresiva();
           modalTurnoEmergente.style.display = 'none';
         }
       }
     });
+
     window.expulsar = function(claveUsuario) {
       if (confirm('¿Deseas expulsar a este usuario inactivo del sistema?')) {
         socket.emit('expulsar-usuario', claveUsuario, () => {
@@ -446,4 +470,4 @@ const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
     };
   </script>
 </body>
-</html> 
+</html>
