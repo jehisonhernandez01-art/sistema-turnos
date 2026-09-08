@@ -166,6 +166,7 @@
       <h2>Asignación de PC</h2>
       <p style="margin-top: 5px; color: #b2bec3;">Ingresa tu nombre para identificarte en el sistema</p>
       <input type="text" id="inputNombre" placeholder="Tu nombre..." autocomplete="off">
+      <div id="mensajeErrorLogin" style="color: #ff4757; font-size: 14px; margin-bottom: 10px; display: none;"></div>
       <button id="btnIngresar" class="btn-ingresar">Entrar al Sistema</button>
       <hr style="border: 0; border-top: 1px solid #636e72; margin: 15px 0;">
       <button id="btnSoloVista" class="btn-solo-vista">👁️ Acceder en Solo Vista</button>
@@ -232,6 +233,7 @@
     const contadorSegundos = document.getElementById('contadorSegundos');
     const contenedorTimer = document.getElementById('contenedorTimer');
     const listaUsuariosKick = document.getElementById('listaUsuariosKick');
+    const mensajeErrorLogin = document.getElementById('mensajeErrorLogin');
 
     let miClave = localStorage.getItem('ruleta_clave_pc') || '';
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
@@ -242,6 +244,7 @@
     let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
 
     function registrar(nombre) {
+      mensajeErrorLogin.style.display = 'none';
       socket.emit('registrar-usuario', nombre, (res) => {
         if (res && res.exito) {
           miClave = res.usuario.clave;
@@ -254,6 +257,9 @@
           btnSalirTurno.style.display = 'inline-block';
           btnTiempoFuera.style.display = 'inline-block';
           infoUsuario.textContent = `PC asignada a: ${miNombre}`;
+        } else {
+          mensajeErrorLogin.textContent = res.mensaje || 'Error al registrar.';
+          mensajeErrorLogin.style.display = 'block';
         }
       });
     }
@@ -305,7 +311,7 @@
           detenerCuentaRegresiva();
           usuariosInactivosList[claveUsuarioActual] = true;
           localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
-          socket.emit('siguiente-turno');
+          socket.emit('siguiente-turno', 'ocupado');
         }
       }, 1000);
     }
@@ -323,12 +329,12 @@
         delete usuariosInactivosList[miClave];
         localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
       }
-      socket.emit('siguiente-turno');
+      socket.emit('siguiente-turno', 'atendido');
     });
 
     btnOcupado.addEventListener('click', () => {
       detenerCuentaRegresiva();
-      socket.emit('siguiente-turno');
+      socket.emit('siguiente-turno', 'ocupado');
     });
 
     btnSalirTurno.addEventListener('click', () => {
@@ -405,19 +411,28 @@
         ctx.rotate(inicio + anguloPorSector / 2);
         ctx.textAlign = "right";
         ctx.fillStyle = "#fff";
-        ctx.font = "bold 18px Segoe UI";
-        ctx.fillText(u.nombre + (u.enTiempoFuera ? ' (PAUSA)' : ''), radio - 20, 6);
+        ctx.font = "bold 15px Segoe UI";
+        
+        // Formatear texto con nombre, estado de pausa y contadores
+        const textoPausa = u.enTiempoFuera ? ' (PAUSA)' : '';
+        const textoContadores = ` [🟢${u.turnosAtendidos || 0} | 🟡${u.saltosOcupado || 0}]`;
+        
+        ctx.fillText(u.nombre + textoPausa + textoContadores, radio - 15, 5);
         ctx.restore();
       });
 
-      // Lista de usuarios y botón Kick
+      // Lista de usuarios y botón Kick con desglose de contadores
       listaUsuariosKick.innerHTML = '<h3 style="margin-bottom:10px; text-align:center;">Participantes</h3>';
       usuarios.forEach(u => {
         const esInactivo = usuariosInactivosList[u.clave];
         const item = document.createElement('div');
         item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:8px 12px; margin-bottom:5px; background:#2d3436; border-radius:6px;';
         
-        let html = `<span><strong style="color:${u.color}">● ${u.nombre}</strong> ${u.enTiempoFuera ? '<i>(Tiempo Fuera)</i>' : ''}</span>`;
+        let html = `<span>
+          <strong style="color:${u.color}">● ${u.nombre}</strong> 
+          ${u.enTiempoFuera ? '<i>(Tiempo Fuera)</i>' : ''}
+          <small style="margin-left: 8px; color: #b2bec3;">(Atendidos: 🟢 ${u.turnosAtendidos || 0} | Ocupado: 🟡 ${u.saltosOcupado || 0})</small>
+        </span>`;
         
         if (esInactivo && u.clave !== miClave) {
           html += `<button onclick="expulsar('${u.clave}')" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">Kick 🚫</button>`;
