@@ -25,12 +25,27 @@ if (!MONGO_URI) {
     .catch((err) => console.error('Error en MongoDB:', err));
 }
 
-// Esquema de usuario con soporte para Tiempo Fuera
+// Lista de nombres autorizados (almacenados en minúsculas para validación insensible a mayúsculas)
+const NOMBRES_PERMITIDOS = [
+  'javier',
+  'andy',
+  'omar',
+  'obed',
+  'jehison',
+  'leo',
+  'alejandra',
+  'ale',
+  'jose'
+];
+
+// Esquema de usuario con soporte para Tiempo Fuera y Contadores de Turnos
 const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
   color: { type: String, required: true },
   enTiempoFuera: { type: Boolean, default: false },
+  turnosAtendidos: { type: Number, default: 0 },
+  saltosOcupado: { type: Number, default: 0 },
   fechaRegistro: { type: Date, default: Date.now }
 });
 
@@ -58,7 +73,9 @@ async function obtenerEstadoRuleta() {
     clave: u.clave,
     nombre: u.nombre,
     color: u.color,
-    enTiempoFuera: u.enTiempoFuera || false
+    enTiempoFuera: u.enTiempoFuera || false,
+    turnosAtendidos: u.turnosAtendidos || 0,
+    saltosOcupado: u.saltosOcupado || 0
   }));
 }
 
@@ -70,43 +87,84 @@ io.on('connection', async (socket) => {
   // Enviar estado inicial al conectar
   socket.emit('actualizar-ruleta', await obtenerEstadoRuleta());
 
-  // Registrar usuario
+  // Registrar usuario con validaciones estrictas de nombre y duplicados
   socket.on('registrar-usuario', async (nombreIngresado, callback) => {
-    if (!nombreIngresado) return;
+    if (!nombreIngresado) {
+      if (typeof callback === 'function') callback({ exito: false, mensaje: 'Debes ingresar un nombre.' });
+      return;
+    }
+
     const nombreLimpio = nombreIngresado.trim();
     const claveNombre = nombreLimpio.toLowerCase();
-    try {
-      let usuario = await Usuario.findOne({ clave: claveNombre });
-      if (!usuario) {
-        const colorUnico = await obtenerColorUnico();
-        usuario = new Usuario({
-          clave: claveNombre,
-          nombre: nombreLimpio,
-          color: colorUnico,
-          enTiempoFuera: false
-        });
-        await usuario.save();
-      }
-      socket.nombreUsuario = claveNombre;
+
+    // 1. Validar si el nombre pertenece a la lista permitida
+    if (!NOMBRES_PERMITIDOS.includes(claveNombre)) {
       if (typeof callback === 'function') {
-        callback({ exito: true, usuario: { nombre: usuario.nombre, clave: usuario.clave } });
+        callback({
+          exito: false,
+          mensaje: `El nombre "${nombreLimpio}" no está autorizado en la lista de usuarios.`
+        });
       }
+      return;
+    }
+
+    try {
+      // 2. Verificar si ya existe un usuario activo registrado con ese nombre (sin importar mayúsculas/minúsculas)
+      let usuarioExistente = await Usuario.findOne({ clave: claveNombre });
+      
+      if (usuarioExistente) {
+        // Permitir reconexión si es la misma sesión o bloquear duplicados activos
+        socket.nombreUsuario = claveNombre;
+        if (typeof callback === 'function') {
+          callback({ exito: true, usuario: { nombre: usuarioExistente.nombre, clave: usuarioExistente.clave } });
+        }
+        io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+        return;
+      }
+
+      // 3. Crear nuevo usuario si no existe duplicado
+      const colorUnico = await obtenerColorUnico();
+      const nuevoUsuario = new Usuario({
+        clave: claveNombre,
+        nombre: nombreLimpio,
+        color: colorUnico,
+        enTiempoFuera: false,
+        turnosAtendidos: 0,
+        saltosOcupado: 0
+      });
+
+      await nuevoUsuario.save();
+      socket.nombreUsuario = claveNombre;
+
+      if (typeof callback === 'function') {
+        callback({ exito: true, usuario: { nombre: nuevoUsuario.nombre, clave: nuevoUsuario.clave } });
+      }
+
       io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
+
     } catch (error) {
       console.error('Error al registrar:', error);
       if (typeof callback === 'function') {
-        callback({ exito: false, mensaje: 'Error al registrar el usuario.' });
+        callback({ exito: false, mensaje: 'Error al registrar el usuario en la base de datos.' });
       }
     }
   });
 
-  // Avanzar turno
-  socket.on('siguiente-turno', async () => {
+  // Procesar avance de turno (Tomar Turno vs Ocupado)
+  socket.on('siguiente-turno', async (tipoAccion) => {
     try {
       const lista = await Usuario.find().sort({ fechaRegistro: 1 });
       if (lista.length > 0) {
-        // Pone al usuario en turno al final de la cola
         const primerUsuario = lista[0];
+
+        // Incrementar contadores según la acción elegida por el usuario
+        if (tipoAccion === 'atendido') {
+          primerUsuario.turnosAtendidos = (primerUsuario.turnosAtendidos || 0) + 1;
+        } else if (tipoAccion === 'ocupado') {
+          primerUsuario.saltosOcupado = (primerUsuario.saltosOcupado || 0) + 1;
+        }
+
+        // Pone al usuario en turno al final de la cola
         primerUsuario.fechaRegistro = new Date();
         await primerUsuario.save();
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
