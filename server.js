@@ -25,7 +25,7 @@ if (!MONGO_URI) {
     .catch((err) => console.error('Error en MongoDB:', err));
 }
 
-// Lista de nombres autorizados (almacenados en minúsculas para validación insensible a mayúsculas)
+// Lista de nombres autorizados (insensible a mayúsculas)
 const NOMBRES_PERMITIDOS = [
   'javier',
   'andy',
@@ -38,7 +38,7 @@ const NOMBRES_PERMITIDOS = [
   'jose'
 ];
 
-// Esquema de usuario con soporte para Tiempo Fuera y Contadores de Turnos
+// Esquema de usuario con seguimiento de saltos/inactividades consecutivas
 const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
@@ -46,6 +46,7 @@ const usuarioSchema = new mongoose.Schema({
   enTiempoFuera: { type: Boolean, default: false },
   turnosAtendidos: { type: Number, default: 0 },
   saltosOcupado: { type: Number, default: 0 },
+  saltosConsecutivos: { type: Number, default: 0 },
   fechaRegistro: { type: Date, default: Date.now }
 });
 
@@ -66,7 +67,6 @@ async function obtenerColorUnico() {
   return '#' + Math.floor(Math.random() * 16777215).toString(16);
 }
 
-// Retorna los usuarios ordenados por llegada
 async function obtenerEstadoRuleta() {
   const usuarios = await Usuario.find().sort({ fechaRegistro: 1 });
   return usuarios.map(u => ({
@@ -79,15 +79,12 @@ async function obtenerEstadoRuleta() {
   }));
 }
 
-// Contraseña para reiniciar el sistema
 const ADMIN_PASSWORD = '123';
 
 io.on('connection', async (socket) => {
 
-  // Enviar estado inicial al conectar
   socket.emit('actualizar-ruleta', await obtenerEstadoRuleta());
 
-  // Registrar usuario con validaciones estrictas de nombre y duplicados
   socket.on('registrar-usuario', async (nombreIngresado, callback) => {
     if (!nombreIngresado) {
       if (typeof callback === 'function') callback({ exito: false, mensaje: 'Debes ingresar un nombre.' });
@@ -97,7 +94,6 @@ io.on('connection', async (socket) => {
     const nombreLimpio = nombreIngresado.trim();
     const claveNombre = nombreLimpio.toLowerCase();
 
-    // 1. Validar si el nombre pertenece a la lista permitida
     if (!NOMBRES_PERMITIDOS.includes(claveNombre)) {
       if (typeof callback === 'function') {
         callback({
@@ -109,11 +105,9 @@ io.on('connection', async (socket) => {
     }
 
     try {
-      // 2. Verificar si ya existe un usuario activo registrado con ese nombre (sin importar mayúsculas/minúsculas)
       let usuarioExistente = await Usuario.findOne({ clave: claveNombre });
       
       if (usuarioExistente) {
-        // Permitir reconexión si es la misma sesión o bloquear duplicados activos
         socket.nombreUsuario = claveNombre;
         if (typeof callback === 'function') {
           callback({ exito: true, usuario: { nombre: usuarioExistente.nombre, clave: usuarioExistente.clave } });
@@ -122,7 +116,6 @@ io.on('connection', async (socket) => {
         return;
       }
 
-      // 3. Crear nuevo usuario si no existe duplicado
       const colorUnico = await obtenerColorUnico();
       const nuevoUsuario = new Usuario({
         clave: claveNombre,
@@ -130,7 +123,8 @@ io.on('connection', async (socket) => {
         color: colorUnico,
         enTiempoFuera: false,
         turnosAtendidos: 0,
-        saltosOcupado: 0
+        saltosOcupado: 0,
+        saltosConsecutivos: 0
       });
 
       await nuevoUsuario.save();
@@ -150,23 +144,34 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Procesar avance de turno (Tomar Turno vs Ocupado)
+  // Avance de turno según tipo de acción
   socket.on('siguiente-turno', async (tipoAccion) => {
     try {
       const lista = await Usuario.find().sort({ fechaRegistro: 1 });
       if (lista.length > 0) {
         const primerUsuario = lista[0];
 
-        // Incrementar contadores según la acción elegida por el usuario
         if (tipoAccion === 'atendido') {
           primerUsuario.turnosAtendidos = (primerUsuario.turnosAtendidos || 0) + 1;
+          primerUsuario.saltosConsecutivos = 0; // Reiniciar contador de inactividad
         } else if (tipoAccion === 'ocupado') {
           primerUsuario.saltosOcupado = (primerUsuario.saltosOcupado || 0) + 1;
+          primerUsuario.saltosConsecutivos = (primerUsuario.saltosConsecutivos || 0) + 1;
+        } else if (tipoAccion === 'automatico') {
+          // No cuenta como ocupado, solo incrementa saltos consecutivos
+          primerUsuario.saltosConsecutivos = (primerUsuario.saltosConsecutivos || 0) + 1;
         }
 
-        // Pone al usuario en turno al final de la cola
+        // Si acumula 2 saltos/inactividades seguidas, pasa a Tiempo Fuera automáticamente
+        if (primerUsuario.saltosConsecutivos >= 2) {
+          primerUsuario.enTiempoFuera = true;
+          primerUsuario.saltosConsecutivos = 0;
+        }
+
         primerUsuario.fechaRegistro = new Date();
         await primerUsuario.save();
+
+        io.emit('girar-ruleta');
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
       }
     } catch (error) {
@@ -174,13 +179,15 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Cambiar estado de Tiempo Fuera
   socket.on('toggle-tiempo-fuera', async (claveUsuario) => {
     if (!claveUsuario) return;
     try {
       const usuario = await Usuario.findOne({ clave: claveUsuario });
       if (usuario) {
         usuario.enTiempoFuera = !usuario.enTiempoFuera;
+        if (!usuario.enTiempoFuera) {
+          usuario.saltosConsecutivos = 0; // Reinicia al volver de la pausa
+        }
         await usuario.save();
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
       }
@@ -189,7 +196,6 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Expulsar usuario (Kick)
   socket.on('expulsar-usuario', async (claveUsuario, callback) => {
     if (!claveUsuario) return;
     try {
@@ -202,7 +208,6 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Finalizar conexión de un usuario específico
   socket.on('finalizar-conexion', async (claveUsuario, callback) => {
     if (!claveUsuario) return;
     try {
@@ -219,7 +224,6 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Reiniciar sistema con validación de contraseña
   socket.on('reiniciar-sistema', async (passwordIngresada, callback) => {
     if (passwordIngresada !== ADMIN_PASSWORD) {
       if (typeof callback === 'function') {
@@ -233,7 +237,6 @@ io.on('connection', async (socket) => {
       if (typeof callback === 'function') {
         callback({ exito: true, mensaje: 'Sistema reiniciado exitosamente.' });
       }
-      console.log('Sistema de turnos reiniciado correctamente.');
     } catch (error) {
       console.error('Error al reiniciar:', error);
       if (typeof callback === 'function') {
