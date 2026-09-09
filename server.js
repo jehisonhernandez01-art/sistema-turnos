@@ -145,7 +145,6 @@ io.on('connection', async (socket) => {
   // Avance de turno
   socket.on('siguiente-turno', async (tipoAccion) => {
     try {
-      // Buscar el primer usuario que NO esté en tiempo fuera
       const usuariosActivos = await Usuario.find({ enTiempoFuera: false }).sort({ fechaRegistro: 1 });
       
       if (usuariosActivos.length > 0) {
@@ -174,6 +173,12 @@ io.on('connection', async (socket) => {
       const usuario = await Usuario.findOne({ clave: claveUsuario });
       if (usuario) {
         usuario.enTiempoFuera = !usuario.enTiempoFuera;
+        
+        // Al regresar de pausa, pasa al final de la cola para no interrumpir el turno actual
+        if (!usuario.enTiempoFuera) {
+          usuario.fechaRegistro = new Date();
+        }
+
         await usuario.save();
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
       }
