@@ -357,14 +357,18 @@
         return;
       }
 
+      // Buscar el índice del primer usuario activo en la lista completa
+      let indicePrimerActivo = usuarios.findIndex(u => !u.enTiempoFuera);
+      if (indicePrimerActivo === -1) indicePrimerActivo = 0;
+
       // Dibujar Canvas
       const centroX = canvas.width / 2;
       const centroY = canvas.height / 2;
       const radio = canvas.width / 2;
       const anguloPorSector = (2 * Math.PI) / total;
-      
-      // La flecha apunta a arriba (-Math.PI/2). El primer sector activo se posiciona exacto ahí.
-      const offset = -Math.PI / 2 - (anguloPorSector / 2);
+
+      // Cálculo del desfasamiento para que la flecha (-Math.PI/2) apunte SIEMPRE al primer usuario HABILITADO
+      const offset = -Math.PI / 2 - (anguloPorSector / 2) - (indicePrimerActivo * anguloPorSector);
 
       usuarios.forEach((u, index) => {
         const inicio = offset + (index * anguloPorSector);
@@ -383,13 +387,13 @@
         ctx.rotate(inicio + anguloPorSector / 2);
         ctx.textAlign = "right";
 
-        // Nombre de usuario en Blanco
+        // Nombre de usuario
         ctx.fillStyle = "#fff";
         ctx.font = "bold 15px Segoe UI";
         const textoPausa = u.enTiempoFuera ? ' (PAUSA)' : '';
         ctx.fillText(u.nombre + textoPausa, radio - 15, -4);
 
-        // Números en verde y rojo justo abajito del nombre
+        // Números en verde y rojo debajo del nombre
         const atendidos = u.turnosAtendidos || 0;
         const ocupados = u.saltosOcupado || 0;
 
@@ -399,7 +403,6 @@
         ctx.fillStyle = "#ff4d4d";
         ctx.fillText(`${ocupados}`, radio - 15, 14);
 
-        // Espaciado para el contador de Atendidos
         const anchoOcupado = ctx.measureText(`${ocupados}`).width;
 
         // Dibujar Atendidos (Verde)
