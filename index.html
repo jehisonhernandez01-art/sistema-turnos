@@ -184,11 +184,6 @@
         box-shadow: 0 4px 10px rgba(0,0,0,0.15);
       "></h1>
       <p id="descripcionModalTurno">Tienes la atención asignada con el Técnico.</p>
-      
-      <!-- Contador Regresivo -->
-      <div id="contenedorTimer" style="font-size: 22px; font-weight: bold; color: #e74c3c; margin-bottom: 15px;">
-        Cambio automático en: <span id="contadorSegundos">180</span>s
-      </div>
 
       <div style="display: flex; gap: 10px; justify-content: center;">
         <button id="btnEnTurno">Tomar Turno</button>
@@ -231,8 +226,6 @@
     const btnSalirTurno = document.getElementById('btnSalirTurno');
     const btnReiniciarGeneral = document.getElementById('btnReiniciarGeneral');
     const btnTiempoFuera = document.getElementById('btnTiempoFuera');
-    const contadorSegundos = document.getElementById('contadorSegundos');
-    const contenedorTimer = document.getElementById('contenedorTimer');
     const listaUsuariosKick = document.getElementById('listaUsuariosKick');
     const mensajeErrorLogin = document.getElementById('mensajeErrorLogin');
 
@@ -240,8 +233,6 @@
     let miNombre = localStorage.getItem('ruleta_nombre_pc') || '';
     let esSoloVista = localStorage.getItem('ruleta_solo_vista') === 'true';
     
-    let contadorIntervalo = null;
-    let segundosRestantes = 180; // 3 minutos
     let usuariosInactivosList = JSON.parse(localStorage.getItem('ruleta_inactivos') || '{}');
     let rotacionActual = 0;
 
@@ -299,37 +290,7 @@
       socket.emit('toggle-tiempo-fuera', miClave);
     });
 
-    // Temporizador de 3 minutos (180s)
-    function iniciarCuentaRegresiva(claveUsuarioActual) {
-      detenerCuentaRegresiva();
-      segundosRestantes = 180;
-      contadorSegundos.textContent = segundosRestantes;
-      contenedorTimer.style.display = 'block';
-
-      contadorIntervalo = setInterval(() => {
-        segundosRestantes--;
-        contadorSegundos.textContent = segundosRestantes;
-
-        if (segundosRestantes <= 0) {
-          detenerCuentaRegresiva();
-          usuariosInactivosList[claveUsuarioActual] = true;
-          localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
-          
-          // No cuenta como ocupado
-          socket.emit('siguiente-turno', 'automatico');
-        }
-      }, 1000);
-    }
-
-    function detenerCuentaRegresiva() {
-      if (contadorIntervalo) {
-        clearInterval(contadorIntervalo);
-        contadorIntervalo = null;
-      }
-    }
-
     btnEnTurno.addEventListener('click', () => {
-      detenerCuentaRegresiva();
       if (miClave && usuariosInactivosList[miClave]) {
         delete usuariosInactivosList[miClave];
         localStorage.setItem('ruleta_inactivos', JSON.stringify(usuariosInactivosList));
@@ -338,7 +299,6 @@
     });
 
     btnOcupado.addEventListener('click', () => {
-      detenerCuentaRegresiva();
       socket.emit('siguiente-turno', 'ocupado');
     });
 
@@ -370,7 +330,7 @@
       }
     });
 
-    // Escuchar la animación de giro de 1 vuelta completa (360°)
+    // Animación de giro de 1 vuelta completa (360°)
     socket.on('girar-ruleta', () => {
       rotacionActual += 360;
       canvas.style.transform = `rotate(${rotacionActual}deg)`;
@@ -380,7 +340,7 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       const total = usuarios.length;
 
-      // Filtrar los usuarios que están en Tiempo Fuera
+      // Filtrar los usuarios que NO están en Tiempo Fuera
       const usuariosActivos = usuarios.filter(u => !u.enTiempoFuera);
       const primerUsuario = usuariosActivos.length > 0 ? usuariosActivos[0] : null;
 
@@ -393,7 +353,6 @@
 
       if (total === 0) {
         modalTurnoEmergente.style.display = 'none';
-        detenerCuentaRegresiva();
         listaUsuariosKick.innerHTML = '';
         return;
       }
@@ -403,6 +362,8 @@
       const centroY = canvas.height / 2;
       const radio = canvas.width / 2;
       const anguloPorSector = (2 * Math.PI) / total;
+      
+      // La flecha apunta a arriba (-Math.PI/2). El primer sector activo se posiciona exacto ahí.
       const offset = -Math.PI / 2 - (anguloPorSector / 2);
 
       usuarios.forEach((u, index) => {
@@ -421,13 +382,30 @@
         ctx.translate(centroX, centroY);
         ctx.rotate(inicio + anguloPorSector / 2);
         ctx.textAlign = "right";
+
+        // Nombre de usuario en Blanco
         ctx.fillStyle = "#fff";
         ctx.font = "bold 15px Segoe UI";
-        
         const textoPausa = u.enTiempoFuera ? ' (PAUSA)' : '';
-        const textoContadores = ` [🟢${u.turnosAtendidos || 0} | 🟡${u.saltosOcupado || 0}]`;
-        
-        ctx.fillText(u.nombre + textoPausa + textoContadores, radio - 15, 5);
+        ctx.fillText(u.nombre + textoPausa, radio - 15, -4);
+
+        // Números en verde y rojo justo abajito del nombre
+        const atendidos = u.turnosAtendidos || 0;
+        const ocupados = u.saltosOcupado || 0;
+
+        ctx.font = "bold 13px Segoe UI";
+
+        // Dibujar Ocupados (Rojo)
+        ctx.fillStyle = "#ff4d4d";
+        ctx.fillText(`${ocupados}`, radio - 15, 14);
+
+        // Espaciado para el contador de Atendidos
+        const anchoOcupado = ctx.measureText(`${ocupados}`).width;
+
+        // Dibujar Atendidos (Verde)
+        ctx.fillStyle = "#2ecc71";
+        ctx.fillText(`${atendidos} `, radio - 20 - anchoOcupado, 14);
+
         ctx.restore();
       });
 
@@ -441,7 +419,7 @@
         let html = `<span>
           <strong style="color:${u.color}">● ${u.nombre}</strong> 
           ${u.enTiempoFuera ? '<i>(Tiempo Fuera)</i>' : ''}
-          <small style="margin-left: 8px; color: #b2bec3;">(Atendidos: 🟢 ${u.turnosAtendidos || 0} | Ocupado: 🟡 ${u.saltosOcupado || 0})</small>
+          <small style="margin-left: 8px; color: #b2bec3;">(Atendidos: 🟢 ${u.turnosAtendidos || 0} | Ocupado: 🔴 ${u.saltosOcupado || 0})</small>
         </span>`;
         
         if (esInactivo && u.clave !== miClave) {
@@ -460,7 +438,6 @@
           descripcionModalTurno.textContent = "Atención asignada actualmente con el Técnico.";
           btnEnTurno.style.display = "none";
           btnOcupado.style.display = "none";
-          contenedorTimer.style.display = "none";
           modalTurnoEmergente.style.display = 'flex';
         } else {
           modalTurnoEmergente.style.display = 'none';
@@ -474,12 +451,7 @@
         if (miClave && primerUsuario && primerUsuario.clave === miClave) {
           nombreTurnoActual.textContent = primerUsuario.nombre;
           modalTurnoEmergente.style.display = 'flex';
-          
-          if (!contadorIntervalo) {
-            iniciarCuentaRegresiva(primerUsuario.clave);
-          }
         } else {
-          detenerCuentaRegresiva();
           modalTurnoEmergente.style.display = 'none';
         }
       }
