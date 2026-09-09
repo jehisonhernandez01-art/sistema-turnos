@@ -56,6 +56,9 @@ const PALETA_COLORES = [
   '#e67e22', '#1abc9c', '#e84393', '#00cec9', '#6c5ce7'
 ];
 
+// Estado global para controlar los 60s del Botón Forzar Turno
+let inicioTurnoActualTimestamp = Date.now();
+
 async function obtenerColorUnico() {
   const registrados = await Usuario.find({}, 'color');
   const usados = registrados.map(u => u.color);
@@ -68,14 +71,17 @@ async function obtenerColorUnico() {
 
 async function obtenerEstadoRuleta() {
   const usuarios = await Usuario.find().sort({ fechaRegistro: 1 });
-  return usuarios.map(u => ({
-    clave: u.clave,
-    nombre: u.nombre,
-    color: u.color,
-    enTiempoFuera: u.enTiempoFuera || false,
-    turnosAtendidos: u.turnosAtendidos || 0,
-    saltosOcupado: u.saltosOcupado || 0
-  }));
+  return {
+    usuarios: usuarios.map(u => ({
+      clave: u.clave,
+      nombre: u.nombre,
+      color: u.color,
+      enTiempoFuera: u.enTiempoFuera || false,
+      turnosAtendidos: u.turnosAtendidos || 0,
+      saltosOcupado: u.saltosOcupado || 0
+    })),
+    inicioTurnoTimestamp: inicioTurnoActualTimestamp
+  };
 }
 
 const ADMIN_PASSWORD = '123';
@@ -142,7 +148,7 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Avance de turno
+  // Avance de turno (normal o forzado)
   socket.on('siguiente-turno', async (tipoAccion) => {
     try {
       const usuariosActivos = await Usuario.find({ enTiempoFuera: false }).sort({ fechaRegistro: 1 });
@@ -152,12 +158,15 @@ io.on('connection', async (socket) => {
 
         if (tipoAccion === 'atendido') {
           primerUsuario.turnosAtendidos = (primerUsuario.turnosAtendidos || 0) + 1;
-        } else if (tipoAccion === 'ocupado') {
+        } else if (tipoAccion === 'ocupado' || tipoAccion === 'forzado') {
           primerUsuario.saltosOcupado = (primerUsuario.saltosOcupado || 0) + 1;
         }
 
         primerUsuario.fechaRegistro = new Date();
         await primerUsuario.save();
+
+        // Reiniciar timestamp de 60s para el nuevo turno
+        inicioTurnoActualTimestamp = Date.now();
 
         io.emit('girar-ruleta');
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
@@ -224,7 +233,8 @@ io.on('connection', async (socket) => {
     }
     try {
       await Usuario.deleteMany({});
-      io.emit('actualizar-ruleta', []);
+      inicioTurnoActualTimestamp = Date.now();
+      io.emit('actualizar-ruleta', { usuarios: [], inicioTurnoTimestamp: inicioTurnoActualTimestamp });
       if (typeof callback === 'function') {
         callback({ exito: true, mensaje: 'Sistema reiniciado exitosamente.' });
       }
