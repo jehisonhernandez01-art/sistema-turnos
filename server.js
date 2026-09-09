@@ -38,7 +38,7 @@ const NOMBRES_PERMITIDOS = [
   'jose'
 ];
 
-// Esquema de usuario con seguimiento de saltos/inactividades consecutivas
+// Esquema de usuario
 const usuarioSchema = new mongoose.Schema({
   clave: { type: String, required: true, unique: true },
   nombre: { type: String, required: true },
@@ -46,7 +46,6 @@ const usuarioSchema = new mongoose.Schema({
   enTiempoFuera: { type: Boolean, default: false },
   turnosAtendidos: { type: Number, default: 0 },
   saltosOcupado: { type: Number, default: 0 },
-  saltosConsecutivos: { type: Number, default: 0 },
   fechaRegistro: { type: Date, default: Date.now }
 });
 
@@ -123,8 +122,7 @@ io.on('connection', async (socket) => {
         color: colorUnico,
         enTiempoFuera: false,
         turnosAtendidos: 0,
-        saltosOcupado: 0,
-        saltosConsecutivos: 0
+        saltosOcupado: 0
       });
 
       await nuevoUsuario.save();
@@ -144,28 +142,19 @@ io.on('connection', async (socket) => {
     }
   });
 
-  // Avance de turno según tipo de acción
+  // Avance de turno
   socket.on('siguiente-turno', async (tipoAccion) => {
     try {
-      const lista = await Usuario.find().sort({ fechaRegistro: 1 });
-      if (lista.length > 0) {
-        const primerUsuario = lista[0];
+      // Buscar el primer usuario que NO esté en tiempo fuera
+      const usuariosActivos = await Usuario.find({ enTiempoFuera: false }).sort({ fechaRegistro: 1 });
+      
+      if (usuariosActivos.length > 0) {
+        const primerUsuario = usuariosActivos[0];
 
         if (tipoAccion === 'atendido') {
           primerUsuario.turnosAtendidos = (primerUsuario.turnosAtendidos || 0) + 1;
-          primerUsuario.saltosConsecutivos = 0; // Reiniciar contador de inactividad
         } else if (tipoAccion === 'ocupado') {
           primerUsuario.saltosOcupado = (primerUsuario.saltosOcupado || 0) + 1;
-          primerUsuario.saltosConsecutivos = (primerUsuario.saltosConsecutivos || 0) + 1;
-        } else if (tipoAccion === 'automatico') {
-          // No cuenta como ocupado, solo incrementa saltos consecutivos
-          primerUsuario.saltosConsecutivos = (primerUsuario.saltosConsecutivos || 0) + 1;
-        }
-
-        // Si acumula 2 saltos/inactividades seguidas, pasa a Tiempo Fuera automáticamente
-        if (primerUsuario.saltosConsecutivos >= 2) {
-          primerUsuario.enTiempoFuera = true;
-          primerUsuario.saltosConsecutivos = 0;
         }
 
         primerUsuario.fechaRegistro = new Date();
@@ -185,9 +174,6 @@ io.on('connection', async (socket) => {
       const usuario = await Usuario.findOne({ clave: claveUsuario });
       if (usuario) {
         usuario.enTiempoFuera = !usuario.enTiempoFuera;
-        if (!usuario.enTiempoFuera) {
-          usuario.saltosConsecutivos = 0; // Reinicia al volver de la pausa
-        }
         await usuario.save();
         io.emit('actualizar-ruleta', await obtenerEstadoRuleta());
       }
