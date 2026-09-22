@@ -31,7 +31,7 @@ const NOMBRES_PERMITIDOS = [
   'andy',
   'omar',
   'obed',
-  'jehison',
+  'jared',
   'leo',
   'alejandra',
   'ale',
