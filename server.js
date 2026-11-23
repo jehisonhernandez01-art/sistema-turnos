@@ -36,6 +36,8 @@ const NOMBRES_PERMITIDOS = [
   'alejandra',
   'ale',
   'jose'
+  'ansora'
+  'gabriela'
 ];
 
 // Esquema de usuario
