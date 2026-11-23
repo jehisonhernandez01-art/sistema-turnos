@@ -35,12 +35,12 @@ const NOMBRES_PERMITIDOS = [
   'leo',
   'alejandra',
   'ale',
-  'jose'
-  'ansora'
-  'gabriela'
-  'Doriam'
-  'Ivan'
-  'Jehison'
+  'jose',
+  'ansora',
+  'gabriela',
+    'Doriam',
+      'Ivan',
+        'Jehison',
 ];
 
 // Esquema de usuario
